@@ -1,6 +1,6 @@
-# Using Sequences of Life-events to Predict Human Lives (life2vec)
+# Using Sequences of Life-events to Predict Human Lives
 
-This repository contains code for the [Using Sequences of Life-events to Predict Human Lives](https://doi.org/10.21203/rs.3.rs-2975478/v1)
+This repository contains code for the [Using Sequences of Life-events to Predict Human Lives](https://doi.org/10.21203/rs.3.rs-2975478/v1) (life2vec) paper.
 
 ### Source Code 
 
