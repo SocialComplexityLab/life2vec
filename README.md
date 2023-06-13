@@ -63,6 +63,9 @@ python -m src.prepare_data +data_new/sources=labour target=\${data_new.sources}
 HYDRA_FULL_ERROR=1 python -m src.train experiment=emm trainer.devices=[0] version=0.01
 ```
 
+### Another Code Contributors
+1. Søren Mørk Hartmann.
+
 ### How to cite 
 
 **Research Square Preprint**
