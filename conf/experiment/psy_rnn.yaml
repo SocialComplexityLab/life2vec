@@ -1,0 +1,113 @@
+# @package _global_
+
+###################################
+#### Classification with life2vec model 
+#### (PSY - Traits)
+
+defaults:
+  - /datamodule: hexaco_set
+  - /trainer: eos
+  - /callbacks
+  
+#GENERAL
+version: 2.0
+implementation: "v15"
+comments: "m0del v1.1"
+name: "hexaco"
+model_name: "rnn"
+seed: 2021
+stage: "finetuning" # pre_training, finetuning, prediction, hyp_tune
+ckpt_path: ${last_ckpt:${callbacks.checkpoint.dirpath}} ##a bit weird implementation - fix later
+callbacks.checkpoint.dirpath: ${ckpt_path}
+
+###########################
+###################### MODEL
+model:
+  _target_: src.models.rnn.SimpleGRU_PSY
+  _convert_: all
+  hparams:
+
+    vocab_size: 2043 #this one you should knwo in advance (fix later)
+    batch_size: ${datamodule.batch_size}
+    max_length: ${datamodule.task.max_length}    
+    hidden_size: 512
+    hidden_ff: 2210
+    hidden_act: "swish"
+    n_encoders: -1
+    n_heads: -1
+    n_local: -1
+    local_window_size: -1
+    norm_type: None
+    att_dropout: 0.27 ## Attention Layers
+    fw_dropout: 0.27 ## Positionwise Layers
+    dc_dropout: 0.27 ## Decoder Layer
+    emb_dropout: 0.27 ## Embedding dropout
+    ## TASK AND LOGS
+    training_task: ${datamodule.task.name} # name of the task [mlm, simple]
+    experiment_name: ${name}_${model_name}
+    experiment_version: ${version} 
+    ## ATTENTION
+    attention_type: None
+    multihead_dc: None
+    num_random_features: -1
+
+    parametrize_emb: False
+    norm_input_emb: False
+    norm_output_emb: False
+
+
+     ## OPTIMIZER
+    optimizer_type: "adamw"
+    learning_rate: 1e-3
+    weight_decay: 1e-3
+    weight_decay_dc: 1e-3
+
+    beta1: 0.90
+    beta2: 0.999
+    layer_lr_decay: -1 # for encoder layers
+    lr_gamma: 0.9
+    epsilon: 1.e-8
+
+    #### PSY SPECIFIC
+    freeze_embeddings: False
+    freeze_positions: False
+    num_classes: 5
+    num_targets: 4
+    loss_type: "cdw"
+    weighted_loss: False
+
+
+    ## RNN
+    n_layers: 4
+    bidirectional: true
+
+    pooled: False
+    num_pooled_sep: ${datamodule.task.num_pooled_sep}
+    pretrained_model_path: None
+
+    stage: ${stage}
+    implementation: ${implementation}
+    version: ${version}
+    save_path: "/odrev/projekter/PY000017_D/predictions/${implementation}/hexaco/rnn/${version}"
+
+
+trainer:
+  accelerator: 'gpu'
+  devices: [6]
+  limit_val_batches: 208
+  limit_train_batches: 500
+  accumulate_grad_batches: 8
+  gradient_clip_val: 1
+  gradient_clip_algorithm: "norm"
+  min_epochs: 25
+  max_epochs: 50
+  callbacks:
+    - ${callbacks.collect_outputs}
+    - ${callbacks.track_ids}
+    - ${callbacks.validation_plot}
+    - ${callbacks.rebalanced_sampling}
+    - ${callbacks.checkpoint_psy}
+    - ${callbacks.lr_monitor}
+    - ${callbacks.silence_warnings}
+    - ${callbacks.reseed_dataloader}
+    - ${callbacks.early_stopping_psy}

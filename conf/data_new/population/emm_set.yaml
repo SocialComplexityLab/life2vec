@@ -1,0 +1,20 @@
+defaults:
+  - /data_new/sources
+
+_target_: src.data_new.populations.emm.EmmSubPopulation
+
+name: emm
+earliest_birthday: 01-01-1951
+latest_birthday: 31-12-1981
+
+### You should specify the exact values in the global set
+base_population:  
+  _target_: src.data_new.populations.from_labour.FromLabour
+  name: global_set
+  labour_data: ${data_new.sources.labour}
+  year: 2015
+  earliest_birthday: 01-01-1946
+  latest_birthday: 31-12-1990
+
+period_start: 01-01-2016
+period_end: 31-12-2020

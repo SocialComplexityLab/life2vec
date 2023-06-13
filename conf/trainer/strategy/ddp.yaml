@@ -1,0 +1,13 @@
+# @package _global_
+
+# Uses global package directive in order to set the backend as env variable
+
+trainer:
+  strategy:
+    _target_: src.strategy.DDPPluginFileInit
+
+hydra:
+  job:
+    env_set:
+      PL_TORCH_DISTRIBUTED_BACKEND: "gloo"
+

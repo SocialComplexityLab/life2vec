@@ -1,0 +1,83 @@
+# @package _global_
+# Configuration to run the optimisation of hyperparameters.
+
+defaults:
+  - /datamodule: global_set
+  - /trainer: pretrain
+  - /callbacks
+  
+#GENERAL
+version: 1.1
+implementation: "v15"
+comments: "Optimisation of pre_training parameters"
+name: "pre_training_opt"
+seed: 2021
+
+stage: "optimisation" # pre_training, finetuning, prediction, hyp_tune
+ckpt_path: ${last_ckpt:${callbacks.checkpoint.dirpath}} ##a bit weird implementation - fix later
+callbacks.checkpoint.dirpath: ${ckpt_path}
+
+
+###########################
+###################### MODEL
+model:
+  _target_: src.transformer.models.TransformerEncoder
+  _convert_: all
+  hparams:
+    vocab_size: 2043 #this one you should knwo in advance (fix later)
+    hidden_size: 96
+    hidden_ff: 1280
+    hidden_act: "swish"
+    n_encoders: 14
+    n_heads: 4
+    n_local: 2
+    local_window_size: 64
+    weight_tying: "wt" # "def" - no weight tying // "wt" - Weight Tying
+    #q_with_pos: 0 #inject position into query representation
+    norm_type: "rezero"
+    ##
+    att_dropout: 0.2 ## Attention Layers
+    fw_dropout: 0.2 ## Positionwise Layers
+    dc_dropout: 0.2 ## Decoder Layer
+    emb_dropout: 0.2 ## Embedding dropout
+    training_task: ${datamodule.task.name} # name of the task [mlm, simple]
+    experiment_name: ${name} 
+    parametrize_emb: True
+    norm_input_emb: False
+    norm_output_emb: True
+
+    #ATTENTION
+    attention_type: "performer"
+
+    # only for performer or fast_attention 
+    num_random_features: 288
+
+    # From trainer args..
+    learning_rate: 5.e-3
+    weight_decay: 0.01
+    beta1: 0.9
+    beta2: 0.999
+
+    cls_num_targs: 3
+
+    epsilon: 1.e-6
+    stage: ${stage}
+    implementation: ${implementation}
+    version: ${version}
+
+trainer:
+  accelerator: 'gpu'
+  devices: [7]
+  callbacks:
+    - ${callbacks.checkpoint}
+    - ${callbacks.lr_monitor}
+    - ${callbacks.silence_warnings}
+    - ${callbacks.text_collector}
+    - ${callbacks.embedding_collector}
+    - ${callbacks.reseed_dataloader}
+    - ${callbacks.save_weights}
+
+
+
+    
+    

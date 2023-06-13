@@ -1,0 +1,94 @@
+# @package callbacks
+
+# Hydra doesnt not support lists of config groups, 
+# so the every callbacks are always configured and supplied 
+# to the Trainer using variable interpolation.
+
+checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${user_path}/${local_path}/checkpoints/${implementation}/${name}/${version}
+  verbose: true
+  filename: ${version}-{epoch:02d}
+  save_last: true
+  monitor: "val/perplexity"
+  mode: "min"
+  save_weights_only: false
+  save_top_k: 3
+
+
+checkpoint_cls:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${user_path}/${local_path}/checkpoints/${implementation}/${name}/${model_name}/${version}
+  verbose: true
+  filename: ${version}-{epoch:02d}
+  save_last: true
+  monitor: "val/aul"
+  mode: "max"
+  save_weights_only: false
+  save_top_k: 3
+  
+early_stopping:
+  _target_: pytorch_lightning.callbacks.EarlyStopping
+  monitor: "val/aul"
+  mode: "max"
+  patience: 5
+  strict: True
+  min_delta: 0.001
+
+early_stopping_psy:
+  _target_: pytorch_lightning.callbacks.EarlyStopping
+  monitor: "val/kappa"
+  mode: "max"
+  patience: 10
+  strict: True
+  min_delta: 0.01
+
+checkpoint_psy:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${user_path}/${local_path}/checkpoints/${implementation}/${name}/${model_name}/${version}
+  verbose: true
+  filename: ${version}-{epoch:02d}
+  save_last: true
+  monitor: "val/kappa"
+  mode: "max"
+  save_weights_only: false
+  save_top_k: 5
+
+lr_monitor:
+  _target_: pytorch_lightning.callbacks.LearningRateMonitor
+
+silence_warnings:
+  _target_: src.utils.SilenceWarnings
+
+reseed_dataloader:
+  _target_: src.callbacks.ReseedTrainDataLoader
+
+text_collector:
+  _target_: src.callbacks.TextCollector
+
+embedding_collector:
+  _target_: src.callbacks.EmbeddingCollector
+
+asym_tunning:
+  _target_: src.callbacks.AsymLossTunning
+
+save_weights:
+  _target_: src.callbacks.SaveWeights
+
+collect_outputs:
+  _target_: src.callbacks.CollectOutputs
+
+track_ids:
+  _target_: src.callbacks.TrackIDsEpoch
+
+validation_plot:
+  _target_: src.callbacks.ValidationPlot
+
+calculate_risk:
+  _target_: src.callbacks.CalculateRisk
+
+redraw_random_projections:
+  _target_: src.callbacks.RedrawRandomProjections
+
+rebalanced_sampling:
+  _target_: src.callbacks.RebalancedSampling

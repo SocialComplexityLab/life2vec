@@ -1,0 +1,15 @@
+defaults:
+  - _self_
+  - /experiment: "???"
+
+# Values for the different experiments
+seed: "???"
+version: "???"
+implementation: "???"
+name: "???"
+
+local_path: ".."
+user_path: ".."
+
+# checkpoint
+ckpt_path: null

@@ -1,0 +1,27 @@
+_target_: pytorch_lightning.Trainer
+default_root_dir : ${local_path}/logs/
+fast_dev_run:  False
+weights_summary : "top"
+min_epochs : 5
+max_epochs : 25
+track_grad_norm : 2
+precision: 32
+gradient_clip_val: 0.5
+gradient_clip_algorithm: "norm"
+accumulate_grad_batches: 8
+reload_dataloaders_every_n_epochs : 1
+log_every_n_steps : 10
+num_sanity_val_steps : 10
+limit_train_batches : 500
+limit_val_batches : 120
+limit_test_batches: 5000
+check_val_every_n_epoch : 1
+detect_anomaly: False
+
+
+logger:
+  _target_: pytorch_lightning.loggers.TensorBoardLogger
+  save_dir: ../${local_path}/logs/${implementation}
+  name: ${name}
+  version: ${version}_${model_name}
+

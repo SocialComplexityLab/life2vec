@@ -1,0 +1,34 @@
+# @package data_new.sources
+
+# Health
+health:
+  _target_: src.data_new.sources.health.HealthTokens
+  name: health
+  downsample: False
+
+health_sampled:
+  _target_: src.data_new.sources.health.HealthTokens
+  name: "health_sampled"
+  downsample: True
+
+# Labour
+labour:
+  _target_: src.data_new.sources.labour.LabourTokens
+  name: labour
+  downsample: False
+
+labour_sampled:
+  _target_: src.data_new.sources.labour.LabourTokens
+  name: labour_sampled
+  downsample: True
+  
+# Education  
+education:
+  _target_: src.data_new.sources.education.EducationTokens
+  name: "education"
+  downsample: False
+
+education_sampled:
+  _target_: src.data_new.sources.education.EducationTokens
+  name: education_sampled
+  downsample: True

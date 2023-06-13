@@ -1,0 +1,38 @@
+defaults:
+  - /callbacks
+  - _self_
+
+save_dir: "???"
+seed: 123
+version: 1
+implementation: "v0"
+name: "test"
+
+callbacks:
+  checkpoint:
+    save_top_k: 0
+    monitor: null
+    dirpath: ${save_dir}
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  enable_model_summary: False
+  enable_progress_bar: False
+  log_every_n_steps: 1
+  callbacks:
+    - _target_: src.callbacks.ReseedTrainDataLoader
+    - ${callbacks.silence_warnings}
+    - ${callbacks.checkpoint}
+  logger:
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${save_dir}/logs
+
+datamodule:
+  _target_: src.data.dummy.DummyDatamodule
+  N: 100
+  batch_size: 4
+
+model:
+ _target_: src.models.dummy.DummyModel
+
+ckpt_path: ${last_ckpt:${callbacks.checkpoint.dirpath}}

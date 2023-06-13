@@ -1,0 +1,11 @@
+defaults:
+  - /data_new/sources
+  - /data_new/population@population: emm_set
+
+_target_: src.data_new.datamodule.Corpus
+
+name: emm_set
+
+sources:
+  - ${data_new.sources.health}
+  - ${data_new.sources.labour}

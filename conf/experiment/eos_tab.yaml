@@ -1,0 +1,75 @@
+# @package _global_
+
+###########################
+### Classification with Hierarchical Attention Network 
+### (EOS - Death prediction)
+
+defaults:
+  - /datamodule: survival_tab
+  - /trainer: eos
+  - /callbacks
+  
+#GENERAL
+version: 0.1
+implementation: "v15"
+comments: "m0del v1.1"
+name: "eos"
+model_name: "tab"
+seed: 2021
+
+
+stage: "finetuning" # pre_training, finetuning, prediction, hyp_tune
+cls_num_targets: 2
+asym_penalty: 0.5
+pooled: False #if the final representation is an averaged version of the sequence
+ckpt_path: ${last_ckpt:${callbacks.checkpoint_cls.dirpath}} ##a bit weird implementation - fix later
+callbacks.checkpoint.dirpath: ${ckpt_path}
+
+###########################
+###################### MODEL
+model:
+  _target_: src.models.ffn.FFN
+  _convert_: all
+  hparams:
+
+    input_size: 1976 #this one you should knwo in advance (fix later)
+    hidden_size: 646
+    n_layers: 3
+    dropout: 0.35
+    batch_size: ${datamodule.batch_size}
+
+    encoder_type: 'logistic'
+
+
+    #### CLS SPECIFIC
+    cls_num_targets: ${cls_num_targets}
+    loss_type: "asymmetric"
+    pos_weight: 0.5
+    asym_penalty: ${asym_penalty}
+    asym_alpha: 0.025
+    asym_beta: 1.0
+
+    learning_rate: 1.7e-4
+    weight_decay: 1.e-4
+    beta1: 0.9
+    beta2: 0.999
+    adamsgrad: True
+    epsilon: 1.e-6
+    training_task: ${datamodule.task.name} 
+    stage: ${stage}
+    implementation: ${implementation}
+    version: ${version}
+    experiment_name: ${name}_${model_name}
+    experiment_version: ${version} 
+
+trainer:
+  accelerator: 'gpu'
+  devices: [6]
+  callbacks:
+  - ${callbacks.checkpoint_cls}
+  - ${callbacks.lr_monitor}
+  - ${callbacks.silence_warnings}
+  - ${callbacks.reseed_dataloader}
+  - ${callbacks.early_stopping}
+  - ${callbacks.track_ids}
+  - ${callbacks.collect_outputs} 

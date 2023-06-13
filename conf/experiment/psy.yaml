@@ -1,0 +1,113 @@
+# @package _global_
+
+###################################
+#### Classification with life2vec model 
+#### (PSY - Traits)
+
+defaults:
+  - /datamodule: hexaco_set
+  - /trainer: eos
+  - /callbacks
+  
+#GENERAL
+version: 2.0
+implementation: "v15"
+comments: "m0del v1.1"
+name: "hexaco"
+model_name: "l2v"
+seed: 2021
+stage: "finetuning" # pre_training, finetuning, prediction, hyp_tune
+
+pretrained_model_path: "../weights/v15/mlm/pre_training/1_33.pth"
+ckpt_path: ${last_ckpt:${callbacks.checkpoint.dirpath}} ##a bit weird implementation - fix later
+callbacks.checkpoint.dirpath: ${ckpt_path}
+
+###########################
+###################### MODEL
+model:
+  _target_: src.transformer.cls_model.Transformer_PSY
+  _convert_: all
+  hparams:
+
+    vocab_size: 2043 #this one you should knwo in advance (fix later)
+    batch_size: ${datamodule.batch_size}
+    max_length: ${datamodule.task.max_length}
+    hidden_size: 280
+    hidden_ff: 2210
+    hidden_act: "swish"
+    n_encoders: 5
+    n_heads: 10
+    n_local: 7
+    local_window_size: 38
+    weight_tying: "wt" # "def" - no weight tying // "wt" - Weight Tying
+    norm_type: "rezero"
+    att_dropout: 0.4 ## Attention Layers
+    fw_dropout: 0.4 ## Positionwise Layers
+    dc_dropout: 0.3 ## Decoder Layer
+    emb_dropout: 0.4 ## Embedding dropout
+    parametrize_emb: True
+    norm_input_emb: False
+    ## TASK AND LOGS
+    training_task: ${datamodule.task.name} # name of the task [mlm, simple]
+    experiment_name: ${name}_${model_name}
+    experiment_version: ${version} 
+    ## ATTENTION
+    attention_type: "performer"
+    multihead_dc: False
+    num_random_features: 436
+     ## OPTIMIZER
+    optimizer_type: "adamw"
+    learning_rate: 5e-4
+    weight_decay: 1e-2
+    weight_decay_dc: 1e-3
+    beta1: 0.90
+    beta2: 0.999
+    layer_lr_decay: 0.95 # for encoder layers
+    lr_gamma: 0.8
+    epsilon: 1.e-8
+
+    #### PSY SPECIFIC
+    freeze_embeddings: True
+    freeze_positions: False
+    num_classes: 5
+    num_targets: 4
+    loss_type: "cdw"
+    weighted_loss: False
+
+    pooled: False
+    num_pooled_sep: ${datamodule.task.num_pooled_sep}
+    pretrained_model_path: ${pretrained_model_path}
+    stage: ${stage}
+    implementation: ${implementation}
+    version: ${version}
+    save_path: "../predictions/${implementation}/hexaco/l2v/${version}"
+
+trainer:
+  accelerator: 'gpu'
+  devices: [7]
+  limit_val_batches: 208
+  limit_train_batches: 500
+  accumulate_grad_batches: 8
+  gradient_clip_val: 1
+  gradient_clip_algorithm: "norm"
+  min_epochs: 25
+  max_epochs: 50
+  callbacks:
+    - ${callbacks.checkpoint_psy}
+    - ${callbacks.lr_monitor}
+    - ${callbacks.silence_warnings}
+    - ${callbacks.reseed_dataloader}
+    - ${callbacks.early_stopping_psy}
+   # - ${callbacks.save_weights}
+    - ${callbacks.collect_outputs}
+    - ${callbacks.track_ids}
+    - ${callbacks.validation_plot}
+    - ${callbacks.rebalanced_sampling}
+   # - ${callbacks.redraw_random_projections}
+  
+
+
+
+
+
+ 

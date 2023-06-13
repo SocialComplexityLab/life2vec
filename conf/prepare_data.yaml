@@ -1,0 +1,18 @@
+
+defaults:
+  - _self_
+  - /data_new/sources
+  
+target: ???
+
+single_threaded: false
+interact: false
+
+client:
+  _target_: dask.distributed.Client
+  n_workers: 8
+  threads_per_worker: 2
+  memory_limit: "50GB"
+  dashboard_address: :32895
+  local_directory: ./
+

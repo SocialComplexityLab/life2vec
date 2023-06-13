@@ -1,0 +1,106 @@
+# @package _global_
+
+###################################
+#### Classification with life2vec model 
+#### (EMM - Emmigration Predictions)
+
+defaults:
+  - /datamodule: emm_set
+  - /trainer: eos
+  - /callbacks
+  
+#GENERAL
+version: 0.1
+implementation: "v15"
+comments: "m0del v1.1"
+name: "emm"
+model_name: "rnn"
+seed: 2021
+
+stage: "finetuning" # pre_training, finetuning, prediction, hyp_tune
+asym_penalty: 0.5
+
+### dissable during the tuning
+ckpt_path: ${last_ckpt:${callbacks.checkpoint_cls.dirpath}} ##a bit weird implementation - fix later
+callbacks.checkpoint.dirpath: ${ckpt_path}
+
+###########################
+###################### MODEL
+model:
+  _target_: src.models.rnn.SimpleGRU
+  _convert_: all
+  hparams:
+    seed: ${seed}
+    vocab_size: 2043 #this one you should knwo in advance (fix later)
+    batch_size: ${datamodule.batch_size}
+    max_length: ${datamodule.task.max_length}    
+    hidden_size: 256
+    hidden_ff: -1
+    hidden_act: "swish"
+    n_encoders: -1
+    n_heads: -1
+    n_local: -1
+    local_window_size: -1
+    norm_type: None
+    att_dropout: 0.27 ## Attention Layers
+    fw_dropout: 0.27 ## Positionwise Layers
+    dc_dropout: 0.27 ## Decoder Layer
+    emb_dropout: 0.27 ## Embedding dropout
+    ## TASK AND LOGS
+    training_task: ${datamodule.task.name} # name of the task [mlm, simple]
+    experiment_name: ${name}_${model_name}
+    experiment_version: ${version} 
+    ## ATTENTION
+    attention_type: None
+    multihead_dc: None
+    num_random_features: -1
+
+    parametrize_emb: True
+    norm_input_emb: False
+    norm_output_emb: False
+    freeze_embeddings: False
+    freeze_positions: False
+
+    ## OPTIMIZER
+    optimizer_type: "radam"
+    learning_rate: 1e-3
+    weight_decay: 1e-3
+    beta1: 0.9
+    beta2: 0.999
+    lr_gamma: 0.8
+    epsilon: 1.e-8
+
+    ## RNN
+    n_layers: 3
+    bidirectional: true
+
+    #### CLS SPECIFIC
+
+    num_targets: 2
+    loss_type: "asymmetric"
+    pos_weight: 0.5
+    asym_penalty: ${asym_penalty}
+    asym_alpha: 0.001
+    asym_beta: 1.0
+
+    pooled: True
+    num_pooled_sep: ${datamodule.task.num_pooled_sep}
+    pretrained_model_path: None
+
+    stage: ${stage}
+    implementation: ${implementation}
+    version: ${version}
+
+
+trainer:
+  accelerator: 'gpu'
+  devices: [6]
+  callbacks:
+    - ${callbacks.checkpoint_cls}
+    - ${callbacks.lr_monitor}
+    - ${callbacks.silence_warnings}
+    - ${callbacks.reseed_dataloader}
+    - ${callbacks.early_stopping}
+    - ${callbacks.save_weights}
+    - ${callbacks.collect_outputs}
+    - ${callbacks.track_ids}

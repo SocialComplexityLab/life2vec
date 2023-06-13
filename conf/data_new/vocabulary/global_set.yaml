@@ -1,0 +1,9 @@
+defaults:
+  - /data_new/corpus@corpus: global_set
+
+_target_: src.data_new.vocabulary.CorpusVocabulary
+
+name: ${.corpus.name}
+min_token_count: 1000 
+min_token_count_field:
+  C_ADIAG: 1000
