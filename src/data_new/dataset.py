@@ -87,7 +87,7 @@ class HDF5Dataset(Dataset, Generic[T1, T2]):
                 else:
                     print("Aborting...")
                     raise e
-
+        
         content = self._transform(content)
         return content
 

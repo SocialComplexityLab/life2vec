@@ -17,9 +17,10 @@ import logging
 
 """Custom code"""
 from src.transformer.transformer_utils import *
-from src.transformer.transformer import  AttentionDecoder, CLS_Decoder, AttentionDecoderP, Deep_Decoder, Transformer
+from src.transformer.transformer import  AttentionDecoder, CLS_Decoder_FT2, AttentionDecoderP, Deep_Decoder, Transformer
 from src.transformer.metrics import  CorrectedBAcc, CorrectedF1, CorrectedMCC, AUL
 from coral_pytorch.losses import corn_loss
+from coral_pytorch.dataset import corn_label_from_logits
 from pathlib import Path
 import os
 
@@ -76,7 +77,7 @@ class Transformer_CLS(pl.LightningModule):
             self.encoder_f = self.transformer.forward_finetuning
         else: 
             log.info("Model with the CLS representation")
-            self.decoder = CLS_Decoder(self.hparams)
+            self.decoder = CLS_Decoder_FT2(self.hparams)
             self.encoder_f = self.transformer.forward_finetuning_cls
 
     def init_loss(self):
@@ -87,6 +88,7 @@ class Transformer_CLS(pl.LightningModule):
             self.loss = AsymmetricCrossEntropyLoss(pos_weight=self.hparams.pos_weight)
         elif self.hparams.loss_type == "asymmetric_dynamic":
             raise NotImplementedError
+            #self.loss = AsymmetricCrossEntropyLoss(pos_weight=self.hparams.pos_weight, penalty=self.hparams.asym_penalty)
         elif self.hparams.loss_type == "entropy":
             self.loss = nn.CrossEntropyLoss()
         else:
@@ -297,7 +299,7 @@ class Transformer_CLS(pl.LightningModule):
                     p
                     for n, p in self.named_parameters()
                     if ("embedding" in n) 
-                ],
+                ] ,
                 "weight_decay": 0.0,
                 "lr": lr,
             }
@@ -329,13 +331,22 @@ class Transformer_CLS(pl.LightningModule):
                     "lr": lr,
                 }
             )
+            
         optimizer_grouped_parameters.append(
             {
-                "params": [p for n, p in self.named_parameters() if "decoder" in n],
+                "params": [p for n, p in self.named_parameters() if ("decoder" in n)],
                 "weight_decay": self.hparams.weight_decay_dc,
                 "lr": self.hparams.learning_rate,
             }
         )
+        optimizer_grouped_parameters.append(
+            {
+                "params": [p for n, p in self.named_parameters() if ("target_weight" in n) or ("loss_weight" in n)],
+                "weight_decay": 0.0,
+                "lr": 0.01,
+            }
+        )
+        
 
         if self.hparams.optimizer_type == "radam":
             optimizer = torch.optim.RAdam(
@@ -487,7 +498,11 @@ class Transformer_PSY(Transformer_CLS):
         else: 
             log.info("Model with the CLS representation")
             self.decoder = Deep_Decoder(self.hparams, num_outputs = num_outputs)#MosDecoder(self.hparams, num_outputs=self.num_outputs, k=3)
+            #self.decoder = Causal_Norm_Classifier(self.hparams, num_outputs = num_outputs)
             self.encoder_f = self.transformer.forward_finetuning
+
+           # self.decoder_mom = Deep_Decoder(self.hparams, num_outputs = num_outputs)
+           # self.encoder_mom_f = self.transformer_mom.forward_finetuning
 
     def init_loss(self):
         print("LOSS TYPE:", self.hparams.loss_type)
@@ -518,6 +533,51 @@ class Transformer_PSY(Transformer_CLS):
         self.base_loss_fn = FocalLoss(gamma=2.) #nn.CrossEntropyLoss(label_smoothing=0.3) #FocalLoss(gamma=2.)#nn.CrossEntropyLoss()
         self.smooth_fn = nn.CrossEntropyLoss(label_smoothing=1.)
 
+
+   # def manual_backward(self, loss,  *args, **kwargs):
+       # self._verify_is_manual_optimization("manual_optimization")
+       # self.trainer.strategy.backward(loss, None, None, *args, **kwargs)
+
+  #  def manual_training_step(self, batch, targets, batch_idx):
+       # self.batch_counter += 1
+       # opt = self.optimizers()
+       # predicted = self(batch)
+       # loss = self.loss(predicted, targets)
+       ## self.manual_backward(loss)
+        #self.clip_gradients(opt, gradient_clip_val =1., gradient_clip_algorithm="value")
+        #self.train_step_loss.append(loss.detach())
+
+       # if  self.batch_counter == self.ACCUMULATE_GRADIENT_OVER_N:
+       ##     opt.step()
+         #   opt.zero_grad()
+          #  self.batch_counter = -1
+           # self.mom_last_loss = torch.mean(torch.stack(self.train_step_loss))
+            #print(self.mom_last_loss)
+            #del self.train_step_loss
+            #self.train_step_loss = []
+
+
+        #self.train_step_predictions.append(predicted.detach())
+        #self.train_step_targets.append(targets.detach())
+
+        #if self.last_update != self.global_step:
+         #   self.last_update = self.global_step
+          #  self.log_metrics(
+          #      predictions=torch.cat(self.train_step_predictions),
+          #      targets=torch.cat(self.train_step_targets),
+          #      loss=loss.detach(),
+          #      stage="train",
+          #      on_step=True,
+          #      on_epoch=True,
+          #  )
+          #  del self.train_step_predictions
+          #  del self.train_step_targets
+          ##  self.train_step_targets = []
+           #3
+           # self.train_step_predictions = []
+           # torch.cuda.empty_cache()
+
+        #return loss
 
     def train_forward(self, batch):
         """Forward pass"""
@@ -576,6 +636,62 @@ class Transformer_PSY(Transformer_CLS):
             torch.cuda.empty_cache()
         return loss
 
+    #def sub_training_step_B(self, batch, targets, batch_idx):
+        opt = self.optimizers()
+        for param in self.transformer.parameters():
+            param.requires_grad_(False)
+        for param in self.decoder.parameters():
+            param.requires_grad_(False)
+
+        _, predicted = self.train_forward(batch)
+        loss = self.loss(predicted, targets)
+        self.manual_backward(loss)
+        self.clip_gradients(opt, gradient_clip_val =1., gradient_clip_algorithm="value")
+        opt.step()
+        opt.zero_grad()
+
+        for param in self.transformer.parameters():
+            param.requires_grad_(True)
+        for param in self.decoder.parameters():
+            param.requires_grad_(True)
+        return loss
+
+    #def training_step(self, batch, batch_idx):
+        """Training Iteration"""
+        ## 1. ENCODER-DECODER
+        with torch.no_grad():
+            predicted, predicted_mom = self.train_forward(batch)
+            ## 2. LOSS
+            targets = self.transform_targets(batch["target"],  seq = batch["input_ids"], stage="train")
+
+            loss = self.loss(predicted, targets)
+            loss_mom = self.loss(predicted_mom, targets)
+
+            self.step_data.append((loss - loss_mom, batch, targets))
+        if batch_idx %self.MEDIAN_OVER_N == 0 and batch_idx != 0:
+            losses = torch.stack([l for l, _, _ in self.step_data])
+            median = torch.median(losses)
+            best_idx = torch.isclose(losses, median).nonzero()[0] - 1
+            data = self.step_data[best_idx]
+            loss = self.sub_training_step_A(data[1], data[2], batch_idx)
+
+            losses_B = list()
+            for _, batch, targets in self.step_data:
+                with torch.no_grad():
+                    predicted, predicted_mom = self.train_forward(batch)
+                    ## 2. LOSS
+                    loss = self.loss(predicted, targets)
+                    loss_mom = self.loss(predicted_mom, targets)
+                    losses_B.append(loss - loss_mom)
+            losses = torch.stack(losses_B)
+            median = torch.median(losses)
+            best_idx = torch.isclose(losses, median).nonzero()[0] - 1
+            data = self.step_data[best_idx]
+            loss = self.sub_training_step_B(data[1], data[2], batch_idx)
+            del self.step_data
+            self.step_data = list()
+        return loss
+
     def loss(self, preds, targs):
         if self.hparams.loss_type in REG_LOSS:
             return self._loss_regression(preds,targs)
@@ -591,6 +707,8 @@ class Transformer_PSY(Transformer_CLS):
                 [self._loss_classification(preds[:,i], targs[:,i], weight=weight[i]) for i in range(num_classes)]))
 
             return output
+            ### single prediction
+            return self._loss_classification(preds, targs[:,0].long())
         else:
             raise ValueError("wrong loss type")
        
@@ -611,9 +729,15 @@ class Transformer_PSY(Transformer_CLS):
         if torch.isclose(targs[:,1].sum(),  torch.zeros_like(targs[:,1].sum())):
             return self.loss_fn(preds.view(-1),targs[:,0]).mean()
         return torch.mul(self.loss_fn(preds.view(-1),targs[:,0]),targs[:,1]).mean()
+        #return self.loss_fn(preds,targs)
 
     def transform_targets(self, targets, seq, stage):
         # ['HH','EM','EX','AG','CO','OP', "SDO", "SVOa", "RISK", "CRTi", "CRTr"]
+        #out, _= torch.max(seq[:,2], axis=1)
+        #out = ((out-25)/80).unsqueeze(-1).float()
+        #return out  
+        #   return (targets[:,0].unsqueeze(-1) - 1) / 4.
+        #return torch.hstack([(targets[:,6].unsqueeze(-1)) / 4.125 , targets[:,7].unsqueeze(-1)])
         TRG_ID1, TRG_ID2, TRG_ID3, TRG_ID4 = 19, 22,43, 69
         trg1 = targets[:,TRG_ID1].unsqueeze(-1) - 1
         trg2 = targets[:,TRG_ID2].unsqueeze(-1) - 1
@@ -769,6 +893,7 @@ class Transformer_PSY(Transformer_CLS):
     def log_metrics(self, predictions, targets, loss, stage, on_step: bool = True, on_epoch: bool = True, sid=None):             
         """Compute on step/epoch metrics"""
         assert stage in ["train", "val", "test"]
+        #targets = targets[:,0]
         if self.hparams.loss_type in REG_LOSS:
             self._reg_metrics(predictions, targets.unsqueeze(-1), loss, stage, on_step, on_epoch, sid)
         elif self.hparams.loss_type in CLS_LOSS:
@@ -822,12 +947,32 @@ class Transformer_PSY(Transformer_CLS):
 
         elif stage == "test":
             self.log("test/mcc_%s"%_id, self.test_mcc_dict[_id](scores, targets),on_step=on_step, on_epoch = on_epoch)
+            #self.log("test/mae_%s"%_id, self.test_mae_dict[_id](_scores.view(-1,1), targets.view(-1,1)),on_step=on_step, on_epoch = on_epoch)
             self.log("test/qwk_%s"%_id, self.test_qwk_dict[_id](_scores.view(-1,1), targets.view(-1,1)),on_step=on_step, on_epoch = on_epoch)
+            #self.log("test/f1_%s"%_id, self.test_f1_dict[_id](scores, targets),on_step=on_step, on_epoch = on_epoch)
             rand_score = torch.randint(low = 0, high=5, size=_scores.view(-1,1).shape).to(self.device)
+            #self.log("test/rmae_%s"%_id, self.test_rmae_dict[_id](rand_score, targets.view(-1,1)),on_step=on_step, on_epoch = on_epoch)
+            #self.log("test/rf1_%s"%_id, self.test_rf1_dict[_id](rand_score, targets.view(-1,1)),on_step=on_step, on_epoch = on_epoch)
             self.test_trgs[_id].update(targets.view(-1).cpu())
             self.test_scrs[_id].update(_scores.view(-1).cpu())
             self.test_rnds[_id].update(rand_score.view(-1).cpu())
-       
+            
+            #numpy_scores = _scores.view(-1).cpu().numpy().astype(int)
+            #numpy_target = targets.view(-1).cpu().numpy().astype(int)
+            #try:
+
+                #v = macro_averaged_mean_absolute_error(y_true = numpy_target.tolist(),
+            #                                       y_pred = numpy_scores.tolist())
+            #except:
+            #    v = macro_averaged_mean_absolute_error(y_true = numpy_target,
+            #                                       y_pred = numpy_scores)
+            #self.log("test/mamae_%s"%_id, v, on_step=on_step, on_epoch = on_epoch)
+            #print(targets.view(-1).cpu().numpy().astype(int).tolist())
+            #print(rand_score.view(-1).cpu().numpy().astype(int).tolist())
+            #v = macro_averaged_mean_absolute_error(targets.view(-1).cpu().numpy().astype(int).tolist(),
+            #                                       rand_score.view(-1).cpu().numpy().astype(int).tolist())
+            #self.log("test/rmamae_%s"%_id, v, on_step=on_step, on_epoch = on_epoch)
+
     def on_validation_epoch_end(self):
         result = []
         kappas = []
@@ -877,6 +1022,16 @@ class Transformer_PSY(Transformer_CLS):
                 rkqw_res.append(cohen_kappa_score(_t, _r, weights= "quadratic"))
                 skqw_res.append(cohen_kappa_score(_t, _s, weights= "quadratic"))
 
+            #print("=====MA-MAE=====")
+            #print("SCR ATTR %s:"%i, 
+            #      "CI [%.3f, %.3f]" %(np.quantile(s_res, 0.025), np.quantile(s_res, 0.975)))
+            #print("RND ATTR %s:"%i, 
+            #      "CI [%.3f, %.3f]" %(np.quantile(r_res, 0.025), np.quantile(r_res, 0.975)))
+            #print("=====F1 Score=====")
+           # print("SCR ATTR %s:"%i, 
+           #       "CI [%.3f, %.3f]" %(np.quantile(sf1_res, 0.025), np.quantile(sf1_res, 0.975)))
+           # print("RND ATTR %s:"%i, 
+                 # "CI [%.3f, %.3f]" %(np.quantile(rf1_res, 0.025), np.quantile(rf1_res, 0.975)))
 
             print("=====KQW=====")
             print("SCR ATTR %s:"%i, 

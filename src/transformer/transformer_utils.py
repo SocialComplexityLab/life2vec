@@ -1,4 +1,5 @@
 from signal import Sigmasks
+from unicodedata import unidata_version
 from focal_loss.focal_loss import FocalLoss
 import torch
 import torch.nn as nn
@@ -14,7 +15,6 @@ from torch import nn
 from typing import Optional
 import numpy as np
 
-log = logging.getLogger(__name__)
 
 def _reduction(loss: torch.Tensor, reduction: str) -> torch.Tensor:
     """
@@ -50,7 +50,6 @@ def cumulative_link_loss(y_pred: torch.Tensor, y_true: torch.Tensor,
                          class_weights  = None
                          ) -> torch.Tensor:
     """
-    Based on the implementation from: https://github.com/EthanRosenthal/spacecutter
     Calculates the negative log likelihood using the logistic cumulative link
     function.
 
@@ -124,6 +123,7 @@ def hard_softmax(x, mask, dim=-1):
     x_adj = x_centered - taus 
     x_adj = torch.mul(x_adj, mask)
     
+
     return torch.max(torch.zeros_like(x), x_adj)
 
 
@@ -134,10 +134,9 @@ class Swish(nn.Module):
 def l2_norm(x):
     return F.normalize(x, dim=-1, p=2)
 
-
+log = logging.getLogger(__name__)
 
 class ReProject(nn.Module):
-    """Module to reproject the weights of the matrix (used in MLM decoder)"""
     def __init__(self, hidden_size, activation) -> None:
         super().__init__()
         self.register_parameter("w", nn.Parameter(torch.eye(hidden_size)))
@@ -147,7 +146,6 @@ class ReProject(nn.Module):
         return self.act(F.linear(input=l2_norm(X), weight=self.w, bias=self.bias))
 
 class Center(nn.Module):
-    """Module to center the weights of the matrix (used to center and normalise the embedding matrix"""
     def __init__(self,  ignore_index: torch.LongTensor, norm: bool = False, use_ignore_index: bool = True) -> None:
         super().__init__()
         self.register_buffer("norm", torch.BoolTensor([norm]))
@@ -209,7 +207,6 @@ def gelu_new(x):
 
 
 def swish(x):
-    """SWISH Activatiion function"""
     return x * torch.sigmoid(x)
 
 
@@ -271,7 +268,6 @@ class Gate(torch.nn.Module):
 
 
 class ReZero(torch.nn.Module):
-    """ ReZero Residuals"""
     def __init__(self, hidden_size, simple: bool = True, fill:float =.0):
         """"""
         super(ReZero, self).__init__()
@@ -428,171 +424,191 @@ class EncoderLayer(nn.Module):
 ## Loss Fn
 ###############
 class CDW_CELoss(nn.Module):
-    """Distance aware loss for Ordinal Classification"""
-    def __init__(self, num_classes, alpha= 1., 
-                 use_log_transformation: bool = False, 
-                 smoothing: float = 0.0,
+    def __init__(self, num_classes, alpha= 2., delta = 3.,
+                 reduction: str = "mean",
+                 transform: str = "huber",
+                 eps: float = 1e-5):
+        super(CDW_CELoss, self).__init__()
+        assert alpha > 0, "Alpha should be larger than 0"
+        self.reduction = reduction
+        self.transform = transform
+        self.alpha = alpha
+        self.eps = eps
+        self.num_classes = num_classes
+        self.register_buffer(name="w", tensor=torch.tensor([float(i) for i in range(self.num_classes)]))
+        self.softmax = SigSoftmax()
+
+        self.delta = delta # for huber transform only
+
+    def huber_transform(self, x):
+        return torch.where(
+            x< self.delta,
+            0.5 * torch.pow(x, 2),
+            self.delta * (x - 0.5 * self.delta)
+        )
+
+    def forward(self, logits: Tensor, target: Tensor) -> Tensor:
+        w = torch.abs(self.w - target.view(-1,1))
+
+
+        if self.transform == "huber":
+            w = self.huber_transform(w)
+        elif self.transform == "log":
+            w = torch.log1p(w)
+            w = torch.pow(w, self.alpha)
+        elif self.transform == "power":
+            w = torch.pow(w, self.alpha)
+        else:
+             raise NotImplementedError("%s transform is not implemented" %self.transform)
+
+   
+        loss = - torch.mul(torch.log(1 - logits + self.eps), w).sum(-1)
+        if self.reduction == "mean":
+            return torch.mean(loss)
+        elif self.reduction == "sum":
+            return torch.sum(loss)
+        else:
+            raise NotImplementedError("%s reduction is not implemented" %self.reduction)
+        
+
+class _CDW_CELoss(nn.Module):
+    def __init__(self, num_classes, alpha= 2., 
+                reduction = "mean",
                  eps = 1e-8):
         super(CDW_CELoss, self).__init__()
         assert alpha > 0, "Alpha should be larger than 0"
         self.alpha = alpha
         self.eps = eps
+        self.reduction = reduction
         self.num_classes = num_classes
-        self.use_log_transformation = use_log_transformation
         self.register_buffer(name="w", tensor=torch.tensor([float(i) for i in range(self.num_classes)]))
-
-        self.smoothing = smoothing
-        self.confidence = 1 - smoothing  
 
         self.softmax = SigSoftmax()
 
 
     def forward(self, logits: Tensor, target: Tensor) -> Tensor:
         w = torch.abs(self.w - target.view(-1,1))
-
-        w = w + 1
-        w = torch.log2(w)
+        #w = torch.clip(torch.abs(self.w - target.view(-1,1)), max=float(self.num_classes)/ 2.)
+        #w[w > float(self.num_classes)/ 2.] *= 0
         w = torch.pow(w, self.alpha)
-
-        loss = - torch.mul(torch.log(1 - logits + self.eps), w).sum(-1)
-
-        return   torch.mean(loss)
-        
-
-class AsymmetricCrossEntropyLoss(nn.Module):
-    """CrossEntropy Loss for Positive-Unlabeled Learning"""
-    def __init__(self, pos_weight: float = 0.5, penalty: float = 0., sigmoid: bool = False):
-        super().__init__()
-        self.sigmoid = sigmoid
-        if self.sigmoid:
-            self.ls = nn.LogSigmoid()
+        #prb = torch.softmax(logits, dim=-1)
+        #prb = self.softmax(logits)
+        prb = torch.clamp(self.softmax(logits), min=self.eps)
+        loss = - torch.mul(torch.log(1 - prb), w).sum(-1)
+        if self.reduction == "mean":
+            return   torch.mean(loss)
+        elif self.reduction == "sum":
+            return torch.sum(loss)
         else:
-            self.ls= nn.LogSoftmax(dim = 1)
-        self.loss = nn.NLLLoss()
-        self.register_buffer("penalty", torch.tensor([penalty, 0.]))
-        self.register_buffer("weight", torch.tensor([1-pos_weight, pos_weight]))
-
-    def __calculate_loss__(self, loss_u, loss_p, n_u, n_p):
-        loss_u = loss_u * self.weight[0]
-        loss_p = loss_p * self.weight[1]
-        if n_p == 0: 
-            return loss_u
-        elif n_u == 0:
-            return loss_p
-        else:
-            return loss_p + loss_u
-    
-    def set_penalty(self, penalty):
-        self.penalty[0] = penalty
-    
-    def adjust_penalty(self):
-        self.penalty[0] = torch.addself.penalty[0] * 0.9 + 0.1
-
-    @property
-    def biased_penalty(self):
-        """Penalty for ACE loss without SCAR assumption"""
-        penalty = self.penalty 
-        penalty[0] = penalty[0] / (1.0 - penalty[0])
-        return penalty
-
-    def forward(self, logits: Tensor, target: Tensor) -> Tensor:
-        """
-        Args:
-        logits: raw logits (batch_size, num_classes)
-        targets: one hot encoded (batch_size, num_classes)
-        """
-        n_p = target[:,1].sum()
-        n_u = target.shape[0] - n_p
-        #is_positive, is_negative = (target[:,1] == 1).type(logits.dtype), (target[:,0] == 1).type(logits.dtype)
-
-        if self.sigmoid:
-            logits[target[:,1].squeeze().float() == 0] = logits[target[:,1].squeeze().float() == 0] \
-                + self.penalty.expand(logits[target[:,1].squeeze().float() == 0].shape[0], 2)[:,0]
-            return F.binary_cross_entropy_with_logits(logits.squeeze(),
-                     target=target[:,1].squeeze().float(),  reduction="mean")
-
-            return self.__calculate_loss__(loss_u=loss_u,
-                                           loss_p=loss_p,
-                                           n_p=n_p, n_u = n_u)
-            #return F.binary_cross_entropy_with_logits(logits.squeeze(), target=target[:,1].squeeze().float(), reduction="mean")
-        scores = self.ls(logits)
-        loss_p =  F.nll_loss(scores, target = target[:,1], ignore_index = 0, reduction="mean")
-        
-        scores = logits + self.penalty.expand(scores.shape[0], 2)
-        scores = self.ls(logits)
-        loss_u = F.nll_loss(scores, target = target[:,1], ignore_index=1, reduction="mean")
-        return self.__calculate_loss__(loss_u=loss_u,
-                                       loss_p=loss_p,
-                                       n_p=n_p, n_u = n_u)
-
-class RobustCrossEntropyLoss(nn.Module):
-    """CrossEntropyLoss class for noisy labels
-    Args:
-        T (Tensor): Row-Stochaistic transition matrix for the noise, shape (CxC)
-        roobust_method (str): Specifies the method fo the robustness (either "forward" or "backward")
-    """
-    def __init__(self, T: Tensor = None,
-                 robust_method: str = "backward") -> None:
-        super(RobustCrossEntropyLoss, self).__init__()
-        self.robust_method = robust_method
-        assert self.robust_method in ["forward", "backward"]
-        if self.robust_method == "backward":
-            self.register_buffer("T", torch.linalg.inv(T))
-        else:
-            self.register_buffer("T", T)
-
-    def forward(self, pred: Tensor, target: Tensor, eps: float = 1e-6) -> Tensor:
-        target = target.type(self.T.dtype)
-        if self.robust_method == "backward":
-            target = torch.inner(target, self.T)
-            pred = torch.nn.functional.log_softmax(pred, dim = -1)
-        else:
-            pred = torch.clamp(pred.softmax(-1), min = eps, max = 1-eps)
-            pred = torch.inner(pred, self.T)
-            pred = torch.log(pred)
-
-        return - torch.mean(torch.sum(target * pred, axis = -1))
+            raise NotImplementedError("The %s reduction is not implemented")
 
 
-class CumulativeLinkLoss(nn.Module):
-    """
-    BASED on SPACECUTTER Implementation: https://github.com/EthanRosenthal/spacecutter
 
-    Module form of cumulative_link_loss() loss function
-
-    Parameters
-    ----------
-    reduction : str
-        Method for reducing the loss. Options include 'elementwise_mean',
-        'none', and 'sum'.
-    class_weights : np.ndarray, [num_classes] optional (default=None)
-        An array of weights for each class. If included, then for each sample,
-        look up the true class and multiply that sample's loss by the weight in
-        this array.
+class ClassDistanceWeightedLoss(torch.nn.Module):
 
     """
 
-    def __init__(self, reduction: str = 'elementwise_mean',
-                 class_weights: Optional[torch.Tensor] = None) -> None:
-        super().__init__()
-        self.class_weights = class_weights
+    Instead of calculating the confidence of true class, this class takes into account the confidences of
+
+    non-ground-truth classes and scales them with the neighboring distance.
+
+    Paper: "Class Distance Weighted Cross-Entropy Loss for Ulcerative Colitis Severity Estimation" (https://arxiv.org/abs/2202.05167)
+
+    It is advised to experiment with different power terms. When searching for new power term, linearly increasing
+
+    it works the best due to its exponential effect.
+
+
+
+    """
+
+
+
+    def __init__(self, class_size: int, power: float = 2., reduction: str = "mean"):
+
+        super(ClassDistanceWeightedLoss, self).__init__()
+
+        self.class_size = class_size
+
+        self.power = power
+
         self.reduction = reduction
 
-    def forward(self, y_pred: torch.Tensor,
-                y_true: torch.Tensor) -> torch.Tensor:
-        y_pred = F.softmax(y_pred, dim=1)
-
-        if y_true.ndim == 1:
-            y_true = y_true.unsqueeze(-1)
-        return cumulative_link_loss(y_pred, y_true,
-                                    reduction=self.reduction,
-                                    class_weights=self.class_weights)
 
 
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
+
+        input_sm = input
+
+
+
+        weight_matrix = torch.zeros_like(input_sm)
+
+        for i, target_item in enumerate(target):
+
+            weight_matrix[i] = torch.tensor([abs(k - target_item) for k in range(self.class_size)])
+
+
+
+        weight_matrix.pow_(self.power)
+
+
+
+        # TODO check here, stop here if a nan value and debug it
+
+        reverse_probs = (1 - input_sm).clamp_(min=1e-4)
+
+
+
+        log_loss = -torch.log(reverse_probs)
+
+        if torch.sum(torch.isnan(log_loss) == True) > 0:
+
+            print("nan detected in forward pass")
+
+
+
+        loss = log_loss * weight_matrix
+
+        loss_sum = torch.sum(loss, dim=1)
+
+
+
+        if self.reduction == "mean":
+
+            loss_reduced = torch.mean(loss_sum)
+
+        elif self.reduction == "sum":
+
+            loss_reduced = torch.sum(loss_sum)
+
+        else:
+
+            raise Exception("Undefined reduction type: " + self.reduction)
+
+
+
+        return loss_reduced
+
+
+
+class MultiNoiseLoss(nn.Module):
+    def __init__(self, n_losses):
+        """
+        Initialise the module, and the scalar "noise" parameters (sigmas in arxiv.org/abs/1705.07115).
+        If using CUDA, requires manually setting them on the device, even if the model is already set to device.
+        """
+        super(MultiNoiseLoss, self).__init__()
+        self.register_parameter("noise_params", nn.Parameter(torch.full((n_losses,), 1./float(n_losses))))
+
+    def forward(self, losses):
+        output = [torch.exp(-self.noise_params[i]) * loss + self.noise_params[i] for i, loss in enumerate(losses)]
+        return sum(output)
+        
 class CoVWeightingLoss(nn.Module):
     """
         Wrapper of the BaseLoss which weighs the losses to the Cov-Weighting method,
-        where the statistics are maintained through Welford's algorithm. source: https://github.com/rickgroen/cov-weighting/blob/main/losses/covweighting_loss.py
+        where the statistics are maintained through Welford's algorithm. But now for 32 losses.
     """
 
     def __init__(self, num_losses: int, decay: bool = True, decay_param: float = 0.9):
@@ -680,3 +696,145 @@ class CoVWeightingLoss(nn.Module):
         weighted_losses = [self.alphas[i] * unweighted_losses[i] for i in range(len(unweighted_losses))]
         loss = sum(weighted_losses)
         return loss
+
+
+
+class AsymmetricCrossEntropyLoss(nn.Module):
+    """CrossEntropy Loss for Positive-Unlabeled Learning
+    Args:
+    """
+    def __init__(self, pos_weight: float = 0.5, penalty: float = 0., sigmoid: bool = False):
+        super().__init__()
+        #self.softmax = nn.Softmax(dim=1)
+        #self.loss_positive = nn.CrossEntropyLoss(ignore_index=0 , reduction="sum")
+        #self.loss_negative = nn.CrossEntropyLoss(ignore_index=1, reduction="sum")
+        self.sigmoid = sigmoid
+        if self.sigmoid:
+            self.ls = nn.LogSigmoid()
+        else:
+            self.ls= nn.LogSoftmax(dim = 1)
+        self.loss = nn.NLLLoss()
+        self.register_buffer("penalty", torch.tensor([penalty, 0.]))
+        self.register_buffer("weight", torch.tensor([1-pos_weight, pos_weight]))
+
+    def __calculate_loss__(self, loss_u, loss_p, n_u, n_p):
+        loss_u = loss_u * self.weight[0]
+        loss_p = loss_p * self.weight[1]
+        if n_p == 0: 
+            return loss_u
+        elif n_u == 0:
+            return loss_p
+        else:
+            return loss_p + loss_u
+    
+    def set_penalty(self, penalty):
+        self.penalty[0] = penalty
+    
+    def adjust_penalty(self):
+        self.penalty[0] = torch.addself.penalty[0] * 0.9 + 0.1
+
+    @property
+    def biased_penalty(self):
+        """Penalty for ACE loss without SCAR assumption"""
+        penalty = self.penalty 
+        penalty[0] = penalty[0] / (1.0 - penalty[0])
+        return penalty
+
+    def forward(self, logits: Tensor, target: Tensor) -> Tensor:
+        """
+        Args:
+        logits: raw logits (batch_size, num_classes)
+        targets: one hot encoded (batch_size, num_classes)
+        """
+        n_p = target[:,1].sum()
+        n_u = target.shape[0] - n_p
+        is_positive, is_negative = (target[:,1] == 1).type(logits.dtype), (target[:,0] == 1).type(logits.dtype)
+
+        if self.sigmoid:
+            ## logits +=1
+            return F.binary_cross_entropy_with_logits(logits.squeeze(), target=target[:,1].squeeze().float(), reduction="mean")
+        scores = self.ls(logits)
+        loss_p =  F.nll_loss(scores, target = target[:,1], ignore_index = 0, reduction="mean")
+            #scores = logits + self.penalty.expand(scores.shape[0], 2)
+        scores = self.ls(logits)
+        loss_u = F.nll_loss(scores, target = target[:,1], ignore_index=1, reduction="mean")
+        return self.__calculate_loss__(loss_u=loss_u,
+                                       loss_p=loss_p,
+                                       n_p=n_p, n_u = n_u)
+
+        #else: ## without SCAR assumption
+        #    scores = self.ls(logits + self.biased_penalty)
+
+class RobustCrossEntropyLoss(nn.Module):
+    """CrossEntropyLoss class for noisy labels
+    Args:
+        T (Tensor): Row-Stochaistic transition matrix for the noise, shape (CxC)
+        roobust_method (str): Specifies the method fo the robustness (either "forward" or "backward")
+    """
+    def __init__(self, T: Tensor = None,
+                 robust_method: str = "backward") -> None:
+        super(RobustCrossEntropyLoss, self).__init__()
+        self.robust_method = robust_method
+        assert self.robust_method in ["forward", "backward"]
+        if self.robust_method == "backward":
+            self.register_buffer("T", torch.linalg.inv(T))
+        else:
+            self.register_buffer("T", T)
+
+    def forward(self, pred: Tensor, target: Tensor, eps: float = 1e-6) -> Tensor:
+        target = target.type(self.T.dtype)
+        if self.robust_method == "backward":
+            target = torch.inner(target, self.T)
+            pred = torch.nn.functional.log_softmax(pred, dim = -1)
+        else:
+            pred = torch.clamp(pred.softmax(-1), min = eps, max = 1-eps)
+            pred = torch.inner(pred, self.T)
+            pred = torch.log(pred)
+
+        return - torch.mean(torch.sum(target * pred, axis = -1))
+
+
+class CumulativeLinkLoss(nn.Module):
+    """
+    BASED on SPACECUTTER Implementation
+    Module form of cumulative_link_loss() loss function
+
+    Parameters
+    ----------
+    reduction : str
+        Method for reducing the loss. Options include 'elementwise_mean',
+        'none', and 'sum'.
+    class_weights : np.ndarray, [num_classes] optional (default=None)
+        An array of weights for each class. If included, then for each sample,
+        look up the true class and multiply that sample's loss by the weight in
+        this array.
+
+    """
+
+    def __init__(self, reduction: str = 'elementwise_mean',
+                 class_weights: Optional[torch.Tensor] = None) -> None:
+        super().__init__()
+        self.class_weights = class_weights
+        self.reduction = reduction
+
+    def forward(self, y_pred: torch.Tensor,
+                y_true: torch.Tensor) -> torch.Tensor:
+        y_pred = F.softmax(y_pred, dim=1)
+
+        if y_true.ndim == 1:
+            y_true = y_true.unsqueeze(-1)
+        return cumulative_link_loss(y_pred, y_true,
+                                    reduction=self.reduction,
+                                    class_weights=self.class_weights)
+
+
+def probability_recalibration(probs, pos_true_fraction, pos_train_fraction):
+    pos_scaler = pos_true_fraction/pos_train_fraction
+    neg_scaler = (1-pos_true_fraction)/(1-pos_train_fraction)
+    output= torch.zeros_like(probs)
+
+    output[:,1] = (probs[:,1] * pos_scaler) / ( (probs[:,1]) * pos_scaler) + (probs[:,0] * neg_scaler)
+    output[:,0] = 1-output[:,1]
+    return output
+
+

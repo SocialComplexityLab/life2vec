@@ -528,29 +528,10 @@ class CLSDataModule(L2VDataModule):
         """Returns the test dataloader"""
         indices = self.get_ordered_indexes(split = "test")
         return self.get_fixed_dataloader(self.test, indices)
-        #return self.get_dataloader(self.test, shuffle=False)
-
-
-class _PSYDataModule(CLSDataModule):
-
-    def get_train_weights(self) -> torch.Tensor:
-        ids = self.corpus.population.data_split().train
-        population = self.corpus.population.population()
-        #usecols = ['EX','HH','AG','CO','OP', 'EM', 'D']
-
-        weights = population.loc[ids]["CRTi_w"].values
-        print(weights[:10])
-        return torch.from_numpy(weights).reshape(-1)
-
-    def val_dataloader(self) -> DataLoader:
-        """Returns the validation dataloader"""
-        return self.get_dataloader(self.val, shuffle=False)
 
 
 class PSYDataModule(CLSDataModule):
 
-    #def __post_init__(self) -> None:
-    #    super().__post_init__()
     def setup(self, stage: Optional[str] = None) -> None:
         super().setup(stage)
         self.calibrate = self.get_dataset("train", train_preprocessor=False)
@@ -560,14 +541,9 @@ class PSYDataModule(CLSDataModule):
         weights = torch.tensor([1/float(n_samples)] * n_samples)
         self.weights =  weights
 
-        #self.seqid2id = dict()
-        #for i, item in self.train:
-        #    self.seqid2id[int(item["sequence_id"])] = i
-
     def get_train_weights(self) -> torch.Tensor:
         ids = self.corpus.population.data_split().train
         population = self.corpus.population.population()
-        #usecols = ['EX','HH','AG','CO','OP', 'EM', 'D']
 
         weights = population.loc[ids]["CRTi_w"].values
         print(weights[:10])
@@ -584,7 +560,6 @@ class PSYDataModule(CLSDataModule):
     def train_dataloader(self) -> DataLoader:
         """Returns the training dataloader"""
         return self.get_manual_dataloader(self.train)
-        #return self.get_weighted_dataloader(self.train, weights=self.weight_matrix[:,1], replacement=True)
 
     def rebalancing_dataloader(self) -> DataLoader:
         sampler = torch.utils.data.SequentialSampler(self.calibrate)

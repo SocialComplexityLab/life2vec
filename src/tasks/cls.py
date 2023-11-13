@@ -176,6 +176,51 @@ class CLS(Task):
 
 
 @dataclass
+class CLS_HAN(CLS):
+
+    sentence_num: int = 312
+    word_num: int = 9
+    def encode_document(self, document: PersonDocument) -> "HANEncodedDocument":
+        prefix_sentence = (
+            ["[CLS]"] + Background.get_sentence(document.background) 
+        )
+        sentences = [prefix_sentence] + [s for s in document.sentences]
+
+        abspos = [0.0] + document.abspos[-self.sentence_num+1:]
+        age  = [0.0] + document.age[-self.sentence_num+1:]
+        position = np.zeros((2, self.sentence_num))
+        position[0, 0:len(abspos)] = abspos
+        position[1, 0:len(age)] = age
+
+
+        token2index = self.datamodule.vocabulary.token2index
+        unk_id = token2index["[UNK]"]
+
+        token_ids = np.zeros((self.sentence_num, self.word_num))
+
+        for i,j in enumerate(sentences[-self.sentence_num:]):
+            token_ids[i][0:len(j)] = list(
+            map(
+                lambda x: token2index.get(x, unk_id),
+                j,
+            ),
+        )
+
+        target = np.array(document.task_info).astype(int)
+        sequence_id = np.array(document.person_id)
+
+
+        return HANEncodedDocument(
+            sequence_id=sequence_id,
+            input_ids=token_ids,
+            padding_mask=token_ids.astype(bool),
+            target=target,
+            position=position,
+            original_sequence=token_ids,
+        )
+
+
+@dataclass
 class PSY(CLS):
     # TASK
     def get_document(self, person_sentences: pd.DataFrame) -> PersonDocument:
@@ -199,6 +244,53 @@ class HEXACO(CLS):
             target.append(float(person_sentences[col].iloc[0]))
         document.task_info = cast(JSONSerializable, target)  # makes mypy happy
         return document
+
+
+
+@dataclass
+class PSY_HAN(PSY):
+
+    sentence_num: int = 312
+    word_num: int = 9
+    def encode_document(self, document: PersonDocument) -> "HANEncodedDocument":
+        prefix_sentence = (
+            ["[CLS]"] + Background.get_sentence(document.background) 
+        )
+        sentences = [prefix_sentence] + [s for s in document.sentences]
+
+        abspos = [0.0] + document.abspos[-self.sentence_num+1:]
+        age  = [0.0] + document.age[-self.sentence_num+1:]
+        position = np.zeros((2, self.sentence_num))
+        position[0, 0:len(abspos)] = abspos
+        position[1, 0:len(age)] = age
+
+
+        token2index = self.datamodule.vocabulary.token2index
+        unk_id = token2index["[UNK]"]
+
+        token_ids = np.zeros((self.sentence_num, self.word_num))
+
+        for i,j in enumerate(sentences[-self.sentence_num:]):
+            token_ids[i][0:len(j)] = list(
+            map(
+                lambda x: token2index.get(x, unk_id),
+                j,
+            ),
+        )
+
+        target = np.array(document.task_info).astype(float)
+        sequence_id = np.array(document.person_id)
+
+
+        return HANEncodedDocument(
+            sequence_id=sequence_id,
+            input_ids=token_ids,
+            padding_mask=token_ids.astype(bool),
+            target=target,
+            position=position,
+            original_sequence=token_ids,
+        )
+
 
 
 
