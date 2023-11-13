@@ -1,10 +1,12 @@
 # Using Sequences of Life-events to Predict Human Lives
 
+[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.10118620.svg)](https://zenodo.org/doi/10.5281/zenodo.10118620)
+
 This repository contains code for the [Using Sequences of Life-events to Predict Human Lives](https://doi.org/10.21203/rs.3.rs-2975478/v1) (life2vec) paper.
 
-### Source Code 
+### Source Code
 
-This repository contains scripts and several notebooks for data processing, life2vec training, statistical analysis, and visualization. The model weights, experiment logs, and associated model outputs can be obtained in accordance with the rules of [Statistics Denmark's Research Scheme](https://www.dst.dk/en/TilSalg/Forskningsservice/Dataadgang). 
+This repository contains scripts and several notebooks for data processing, life2vec training, statistical analysis, and visualization. The model weights, experiment logs, and associated model outputs can be obtained in accordance with the rules of [Statistics Denmark's Research Scheme](https://www.dst.dk/en/TilSalg/Forskningsservice/Dataadgang).
 
 Paths (e.g., to data, or model weights) were **redacted** before submitting scripts to GitHub.
 
@@ -22,7 +24,7 @@ We use [Hydra](https://hydra.cc/docs/intro/) to run the experiments. The `/conf`
 The `/analysis` folder contains `ipynb` notebooks for post-hoc evaluation:
 1. `/embedding` contains the analysis of the embedding spaces,
 2. `/metric` contains notebooks for the model evaluation
-3. `/visualisation` contains notebooks for the visualisation of spaces. 
+3. `/visualisation` contains notebooks for the visualisation of spaces.
 
 The source folder, `/src`, contains the data loading and model training codes. Due to the specifics of the `hydra` package, this folder includes TCAV implementation (in `/src/analysis/tcav`) and hyperparameter tuning (in `/src/analysis/hyperparameter`). Here is the overview of the `/src` folder:
 1. The `/src/data_new` contains scripts to preprocess data as well as prepare data to load into the PyTorch or PyTorch Lightning,
@@ -40,7 +42,7 @@ Scripts such as `train.py`, `test.py`, `tune.py`, and `val.py` used to run a par
 
 
 ### Run the script
-To run the code, you would use the following commands: 
+To run the code, you would use the following commands:
 
 ```
 # run the pretraining:
@@ -66,7 +68,7 @@ HYDRA_FULL_ERROR=1 python -m src.train experiment=emm trainer.devices=[0] versio
 ### Another Code Contributors
 1. Søren Mørk Hartmann.
 
-### How to cite 
+### How to cite
 
 **Research Square Preprint**
 ```bibtex
