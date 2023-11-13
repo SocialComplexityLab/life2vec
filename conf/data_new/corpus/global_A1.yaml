@@ -1,0 +1,12 @@
+# Generate a cohort without the Health Information
+
+defaults:
+  - /data_new/sources
+  - /data_new/population@population: global_set
+
+_target_: src.data_new.datamodule.Corpus
+
+name: global_A1
+
+sources:
+  - ${data_new.sources.labour}

@@ -1,0 +1,13 @@
+defaults:
+  - /data_new/corpus@corpus: global_B4
+  - /data_new/vocabulary@vocabulary: global_set
+  - /task@task: mlm
+
+_target_: src.data_new.datamodule.L2VDataModule
+
+batch_size: 8
+num_workers: 2
+
+### If you want to train the model on subsets of data
+subset: False
+subset_id: 0 #max 2

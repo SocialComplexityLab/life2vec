@@ -1,0 +1,12 @@
+defaults:
+  - /data_new/sources
+  - /data_new/population@population: global_B3
+
+_target_: src.data_new.datamodule.Corpus
+
+name: global_B3
+threshold: "2012-01-01"
+
+sources:
+  - ${data_new.sources.health}
+  - ${data_new.sources.labour}

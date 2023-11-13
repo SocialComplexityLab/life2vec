@@ -1,0 +1,101 @@
+# @package _global_
+
+###################################
+#### Classification with life2vec model 
+#### (EOS - Death Predictions)
+
+defaults:
+  - /datamodule: survival_A4
+  - /trainer: eos
+  - /callbacks
+  
+#GENERAL
+version: 5.34
+implementation: "v15"
+comments: "model based on the A4 data"
+name: "eos"
+model_name: "l2v"
+seed: 2021
+
+stage: "finetuning" # pre_training, finetuning, prediction, hyp_tune
+pretrained_model_path: "/odrev/projekter/PY000017_D/weights/v15/mlm/pre_training_l2v/5_3.pth"
+asym_penalty: 0.5
+ckpt_path: ${last_ckpt:${callbacks.checkpoint_cls.dirpath}} ##a bit weird implementation - fix later
+callbacks.checkpoint.dirpath: ${ckpt_path}
+
+###########################
+###################### MODEL
+model:
+  _target_: src.transformer.cls_model.Transformer_CLS
+  _convert_: all
+  hparams:
+    seed: ${seed}
+    vocab_size: 372 #this one you should knwo in advance (fix later)
+    batch_size: ${datamodule.batch_size}
+    max_length: ${datamodule.task.max_length}
+    hidden_size: 280
+    hidden_ff: 2210
+    hidden_act: "swish"
+    n_encoders: 5
+    n_heads: 10
+    n_local: 7
+    local_window_size: 38
+    norm_type: "rezero"
+    att_dropout: 0.1 ## Attention Layers
+    fw_dropout: 0.1 ## Positionwise Layers
+    dc_dropout: 0.05 ## Decoder Layer
+    emb_dropout: 0.05 ## Embedding dropout
+    parametrize_emb: True
+    norm_input_emb: False
+    ## TASK AND LOGS
+    training_task: ${datamodule.task.name} # name of the task [mlm, simple]
+    experiment_name: ${name}_${model_name}
+    experiment_version: ${version} 
+    ## ATTENTION
+    attention_type: "performer"
+    multihead_dc: False
+    num_random_features: 436
+
+    ## OPTIMIZER
+    optimizer_type: "radam"
+    learning_rate: 0.01
+    weight_decay: 0.001
+    weight_decay_dc: 0.01
+    beta1: 0.9
+    beta2: 0.999
+    layer_lr_decay: 0.95 # for encoder layers
+    lr_gamma: 0.8
+    epsilon: 1.e-6
+
+    #### CLS SPECIFIC
+    freeze_embeddings: True
+    freeze_positions: False
+    num_targets: 2
+    loss_type: "asymmetric"
+    pos_weight: 0.5
+    asym_penalty: ${asym_penalty}
+    asym_alpha: 0.025
+    asym_beta: 1.0
+
+    pooled: True
+    num_pooled_sep: ${datamodule.task.num_pooled_sep}
+    pretrained_model_path: ${pretrained_model_path}
+
+    stage: ${stage}
+    implementation: ${implementation}
+    version: ${version}
+
+trainer:
+  accelerator: 'gpu'
+  devices: [6]
+  callbacks:
+    - ${callbacks.checkpoint_cls}
+    - ${callbacks.lr_monitor}
+    - ${callbacks.silence_warnings}
+    - ${callbacks.reseed_dataloader}
+    - ${callbacks.early_stopping}
+    - ${callbacks.save_weights}
+    - ${callbacks.collect_outputs}
+    - ${callbacks.track_ids}
+    - ${callbacks.calculate_risk}
+    #- ${callbacks.redraw_random_projections}

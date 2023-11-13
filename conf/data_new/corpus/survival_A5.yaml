@@ -1,0 +1,10 @@
+defaults:
+  - /data_new/sources
+  - /data_new/population@population: survival_set
+
+_target_: src.data_new.datamodule.Corpus
+
+name: survival_A5
+
+sources:
+  - ${data_new.sources.labour_nojob_nosoc}

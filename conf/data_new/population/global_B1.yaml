@@ -1,0 +1,9 @@
+defaults:
+  - /data_new/sources
+
+_target_: src.data_new.populations.from_labour.FromLabour
+name: global_B1
+labour_data: ${data_new.sources.labour}
+year: 2015
+earliest_birthday: 01-01-1980
+latest_birthday: 31-12-1990

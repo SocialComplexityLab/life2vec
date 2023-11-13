@@ -1,0 +1,11 @@
+defaults:
+  - /data_new/sources
+  - /data_new/population@population: global_B4
+
+_target_: src.data_new.datamodule.Corpus
+
+name: global_B4
+
+sources:
+  - ${data_new.sources.health}
+  - ${data_new.sources.labour}

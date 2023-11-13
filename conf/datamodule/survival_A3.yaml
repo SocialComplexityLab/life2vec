@@ -1,0 +1,9 @@
+defaults:
+  - /data_new/corpus@corpus: survival_A3
+  - /data_new/vocabulary@vocabulary: global_A3
+  - /task@task: cls
+
+_target_: src.data_new.datamodule.CLSDataModule
+
+batch_size: 8
+num_workers: 2

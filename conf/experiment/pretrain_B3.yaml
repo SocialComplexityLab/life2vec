@@ -1,0 +1,80 @@
+# @package _global_
+
+defaults:
+  - /datamodule: global_B3
+  - /trainer: pretrain
+  - /callbacks
+  
+#GENERAL
+version: 6.21
+implementation: "v15"
+comments: "global B3 dataset"
+name: "pre_training"
+model_name: "l2v"
+
+seed: 2023
+
+stage: "pre_training" # pre_training, finetuning, prediction, hyp_tune
+ckpt_path: ${last_ckpt:${callbacks.checkpoint.dirpath}} ##a bit weird implementation - fix later
+callbacks.checkpoint.dirpath: ${ckpt_path}
+
+
+###########################
+###################### MODEL
+model:
+  _target_: src.transformer.models.TransformerEncoder
+  _convert_: all
+  hparams:
+    vocab_size: 2043 #this one you should knwo in advance (fix later)
+    batch_size: ${datamodule.batch_size}
+    max_length: ${datamodule.task.max_length}
+    hidden_size: 280
+    hidden_ff: 2210
+    hidden_act: "swish"
+    n_encoders: 5
+    n_heads: 10
+    n_local: 7
+    local_window_size: 38
+    norm_type: "rezero"
+    att_dropout: 0.1 ## Attention Layers
+    fw_dropout: 0.1 ## Positionwise Layers
+    dc_dropout: 0.1 ## Decoder Layer
+    emb_dropout: 0.1 ## Embedding dropout
+    parametrize_emb: True
+    norm_input_emb: False
+    norm_output_emb: True
+    weight_tying: "wt"
+    ## TASK AND LOGS
+    training_task: ${datamodule.task.name} # name of the task [mlm, simple]
+    experiment_name: ${name}_${model_name}
+    experiment_version: ${version} 
+    ## ATTENTION
+    attention_type: "performer"
+    multihead_dc: False
+    num_random_features: 436
+
+    # From trainer args..
+    learning_rate: 5.e-3
+    weight_decay: 0.01
+    beta1: 0.9
+    beta2: 0.999
+
+    cls_num_targs: 3
+
+    epsilon: 1.e-6
+    stage: ${stage}
+    implementation: ${implementation}
+    version: ${version}
+
+trainer:
+  accelerator: 'gpu'
+  devices: [7]
+  callbacks:
+    - ${callbacks.checkpoint}
+    - ${callbacks.lr_monitor}
+    - ${callbacks.silence_warnings}
+    - ${callbacks.text_collector}
+    - ${callbacks.embedding_collector}
+    - ${callbacks.reseed_dataloader}
+    - ${callbacks.save_weights}
+    - ${callbacks.track_ids}

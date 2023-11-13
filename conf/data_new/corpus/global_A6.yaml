@@ -1,0 +1,12 @@
+# Generate a cohort without the Work Industry, Work Position and Work Sector
+defaults:
+  - /data_new/sources
+  - /data_new/population@population: global_set
+
+_target_: src.data_new.datamodule.Corpus
+
+name: global_A6
+
+sources:
+  - ${data_new.sources.labour_nojob_nosoc}
+  - ${data_new.sources.health}
