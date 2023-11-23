@@ -14,7 +14,7 @@ import logging
 
 """Custom code"""
 from src.transformer.transformer_utils import *
-from src.transformer.transformer import CLS_DecoderS, Transformer, MaskedLanguageModel
+from src.transformer.transformer import Transformer, MaskedLanguageModel, CLS_Decoder
 
 log = logging.getLogger(__name__)
 HOME_PATH = str(Path.home())
@@ -25,6 +25,7 @@ class TransformerEncoder(pl.LightningModule):
     def __init__(self, hparams):
         super(TransformerEncoder, self).__init__()
         self.hparams.update(hparams)
+        #self.idx2token = self.load_lookup(HOME_PATH + self.hparams.dict_path)
         self.last_global_step = 0
         # 1. ENCODER
         self.transformer = Transformer(self.hparams)
@@ -33,14 +34,13 @@ class TransformerEncoder(pl.LightningModule):
         self.task = self.hparams.training_task
         log.info("Training task: %s" %self.task)
         if "mlm" in self.task:
-            ##### Register constants
             self.register_buffer("cls_w", torch.tensor(0.2))
             self.register_buffer("mlm_w", torch.tensor(0.8))
             self.register_buffer("cls_a", torch.tensor([1/0.9, 1/0.1, 1/0.1]))
             self.num_outputs = self.hparams.vocab_size
             ### 2.1. DECODERS
             self.mlm_decoder = MaskedLanguageModel(self.hparams, self.transformer.embedding, act="tanh")
-            self.cls_decoder = CLS_DecoderS(self.hparams)
+            self.cls_decoder = CLS_Decoder(self.hparams)
             ## 2.2. LOSS
             self.cls_loss = nn.CrossEntropyLoss(weight=self.cls_a, label_smoothing=0.1)
             self.mlm_loss = nn.CrossEntropyLoss(ignore_index = 0)

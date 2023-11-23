@@ -16,7 +16,7 @@ import logging
 
 """Custom code"""
 from src.transformer.transformer_utils import *
-from src.transformer.transformer import   AttentionDecoderL, AttentionDecoderP, Deep_Decoder, Flat_Decoder
+from src.transformer.transformer import   AttentionDecoderL,  Flat_Decoder
 from coral_pytorch.losses import corn_loss
 from src.transformer.cls_model import Transformer_CLS
 from pathlib import Path

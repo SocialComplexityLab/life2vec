@@ -8,18 +8,11 @@ import glob
 import pickle
 import os
 
-
-### Script to run the hyperparameter search for RNN-based model.
-### This script generates the values for the parameters
-### You manually add the performance values.
+N_TO_ASK = 6
+N_TO_EVALUATE = 25
 
 
-
-N_TO_ASK = 6 # number of points to evaluate at the same time
-N_TO_EVALUATE = 25 #number of points
-
-
-def dump_results(optimizer, dir_path="../analysis/hyper/scikit_pretraining/", name="results_rnn.pkl"):
+def dump_results(optimizer, dir_path="/.../analysis/hyper/scikit_pretraining/", name="results_fnn.pkl"):
         if not(os.path.exists(dir_path)):
                 os.mkdir(dir_path)
         with open(dir_path + name, "wb") as f:
@@ -28,24 +21,17 @@ def dump_results(optimizer, dir_path="../analysis/hyper/scikit_pretraining/", na
                            "optimizer": optimizer}
                 pickle.dump(results, f)
 
-
-
-
 search_space = [Integer(64, 768, name="hidden_size"),  
                 Integer(1,8, name="n_layers"),
                 Real(0.0, 0.5, name="dropout"), 
-                Categorical([True, False], name="bidirectional")
+                Real(1e-5, 1e-2, name="lr")
                 ]               
-
-
 
 optimizer = Optimizer(dimensions = search_space,
                       base_estimator="GP",
                       acq_func="PI",
                       acq_optimizer="lbfgs",
                       random_state = 2021)
-
-
 
 print("Points evaluated:", len(optimizer.Xi))
 query = optimizer.ask(n_points=N_TO_ASK)
@@ -80,6 +66,5 @@ while len(optimizer.Xi) <= N_TO_EVALUATE:
 i_best = np.argmin(optimizer.yi)
 print("Best metric: %.3f" %optimizer.yi[i_best])
 print("\t", optimizer.Xi[i_best])
-
 
 

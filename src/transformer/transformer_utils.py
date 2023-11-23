@@ -471,127 +471,6 @@ class CDW_CELoss(nn.Module):
             raise NotImplementedError("%s reduction is not implemented" %self.reduction)
         
 
-class _CDW_CELoss(nn.Module):
-    def __init__(self, num_classes, alpha= 2., 
-                reduction = "mean",
-                 eps = 1e-8):
-        super(CDW_CELoss, self).__init__()
-        assert alpha > 0, "Alpha should be larger than 0"
-        self.alpha = alpha
-        self.eps = eps
-        self.reduction = reduction
-        self.num_classes = num_classes
-        self.register_buffer(name="w", tensor=torch.tensor([float(i) for i in range(self.num_classes)]))
-
-        self.softmax = SigSoftmax()
-
-
-    def forward(self, logits: Tensor, target: Tensor) -> Tensor:
-        w = torch.abs(self.w - target.view(-1,1))
-        #w = torch.clip(torch.abs(self.w - target.view(-1,1)), max=float(self.num_classes)/ 2.)
-        #w[w > float(self.num_classes)/ 2.] *= 0
-        w = torch.pow(w, self.alpha)
-        #prb = torch.softmax(logits, dim=-1)
-        #prb = self.softmax(logits)
-        prb = torch.clamp(self.softmax(logits), min=self.eps)
-        loss = - torch.mul(torch.log(1 - prb), w).sum(-1)
-        if self.reduction == "mean":
-            return   torch.mean(loss)
-        elif self.reduction == "sum":
-            return torch.sum(loss)
-        else:
-            raise NotImplementedError("The %s reduction is not implemented")
-
-
-
-class ClassDistanceWeightedLoss(torch.nn.Module):
-
-    """
-
-    Instead of calculating the confidence of true class, this class takes into account the confidences of
-
-    non-ground-truth classes and scales them with the neighboring distance.
-
-    Paper: "Class Distance Weighted Cross-Entropy Loss for Ulcerative Colitis Severity Estimation" (https://arxiv.org/abs/2202.05167)
-
-    It is advised to experiment with different power terms. When searching for new power term, linearly increasing
-
-    it works the best due to its exponential effect.
-
-
-
-    """
-
-
-
-    def __init__(self, class_size: int, power: float = 2., reduction: str = "mean"):
-
-        super(ClassDistanceWeightedLoss, self).__init__()
-
-        self.class_size = class_size
-
-        self.power = power
-
-        self.reduction = reduction
-
-
-
-    def forward(self, input: Tensor, target: Tensor) -> Tensor:
-
-        input_sm = input
-
-
-
-        weight_matrix = torch.zeros_like(input_sm)
-
-        for i, target_item in enumerate(target):
-
-            weight_matrix[i] = torch.tensor([abs(k - target_item) for k in range(self.class_size)])
-
-
-
-        weight_matrix.pow_(self.power)
-
-
-
-        # TODO check here, stop here if a nan value and debug it
-
-        reverse_probs = (1 - input_sm).clamp_(min=1e-4)
-
-
-
-        log_loss = -torch.log(reverse_probs)
-
-        if torch.sum(torch.isnan(log_loss) == True) > 0:
-
-            print("nan detected in forward pass")
-
-
-
-        loss = log_loss * weight_matrix
-
-        loss_sum = torch.sum(loss, dim=1)
-
-
-
-        if self.reduction == "mean":
-
-            loss_reduced = torch.mean(loss_sum)
-
-        elif self.reduction == "sum":
-
-            loss_reduced = torch.sum(loss_sum)
-
-        else:
-
-            raise Exception("Undefined reduction type: " + self.reduction)
-
-
-
-        return loss_reduced
-
-
-
 class MultiNoiseLoss(nn.Module):
     def __init__(self, n_losses):
         """
@@ -605,6 +484,9 @@ class MultiNoiseLoss(nn.Module):
         output = [torch.exp(-self.noise_params[i]) * loss + self.noise_params[i] for i, loss in enumerate(losses)]
         return sum(output)
         
+        
+        
+## BASED on https://github.com/rickgroen/cov-weighting
 class CoVWeightingLoss(nn.Module):
     """
         Wrapper of the BaseLoss which weighs the losses to the Cov-Weighting method,

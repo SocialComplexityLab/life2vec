@@ -145,15 +145,6 @@ def get_hash(obj):
 
     return int(hashlib.shake_128(bytes_repr).hexdigest(4), base=16)
 
-#class AsymLossTunning(pl.Callback):
-#    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-#        metrics = copy.deepcopy(trainer.callback_metrics)
-#        acc = metrics["train/accuracy_epoch"]
-#        fraction_of_positives = metrics["train/accuracy_epoch"]
-#        if acc > (1- (0.5 - fraction_of_positives)):
-#            pass
-#        return super().on_train_epoch_end(trainer, pl_module)
-
 class SaveWeights(pl.Callback):
     def on_fit_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         _id = "%s" %str(pl_module.hparams.version).replace(".","_")
@@ -574,119 +565,10 @@ class ReseedTrainDataLoader(pl.Callback):
             log.info("Setting new dataloader seed= %d", new_seed)
             trainer.train_dataloader.sampler.generator.manual_seed(new_seed)
 
-    
-
-# for single
-class _RebalancedSampling(pl.Callback):
+    class RebalancedSampling(pl.Callback):
     def init_rebalancing(self, trainer, pl_module):
         self.n_classes = pl_module.hparams.num_classes
-        self.n_samples = trainer.train_dataloader.sampler.weights.shape[0]
-        self.n_epochs = trainer.max_epochs
-        self._device = trainer.train_dataloader.sampler.weights.device
-        self._dtype = trainer.train_dataloader.sampler.weights.dtype
-
-        self.difficulty_matrix = torch.zeros((self.n_samples, self.n_epochs), 
-                                              device=self._device, dtype=self._dtype)
-        self.difficulty_matrix[:,0] = 1.
-        self.prb_matrix = torch.zeros((self.n_samples, self.n_epochs + 1, self.n_classes),
-                                       device=self._device, dtype=self._dtype)
-        self.prb_matrix[:,0] = 1/self.n_classes
-        self._w_epoch = torch.full(size = (self.n_epochs, 1), fill_value= 0.9,
-                                    device=self._device, dtype=self._dtype)
-        for i in range(1,self.n_epochs):
-            self._w_epoch[i] = torch.pow(self._w_epoch[i], self.n_epochs-i)
-
-        self.curr_diff = torch.ones(size=(self.n_samples, 1), device=self._device, dtype=self._dtype).reshape(-1)
-
-        self.MAX_DIFF = 1000
-        self.WIN_SIZE = 100
-
-
-    def reweight_dataloader(self, trainer):
-        epoch = trainer.current_epoch
-
-        w = self.difficulty_matrix.sum(-1).to(self._device).type(self._dtype) 
-        print(self.trgs[:4])
-        print("sample 3")
-        print("previous prb\t----------")
-        print(self.prb_matrix[3, epoch])
-        print("current prb\t------------")
-        print(self.prb_matrix[3, epoch+1])
-        print("difficulty matrix\t--------")
-        print(self.difficulty_matrix[3,:10])
-        print("sample 1")
-        print("previous prb\t----------")
-        print(self.prb_matrix[1, epoch])
-        print("current prb\t------------")
-        print(self.prb_matrix[1, epoch+1])
-        print("difficulty matrix\t--------")
-        print(self.difficulty_matrix[1,:10])
-
-        q_min = torch.quantile(w, 0.1)
-        q_max = torch.quantile(w, 0.9)
-        w = torch.clip(w, min=q_min, max=q_max)
-        trainer.train_dataloader.sampler.weights = w.to(self._device).type(self._dtype) 
-        trainer.datamodule.weights = w
-
-
-    def minmax_norm(self, x, eps: float = 1e-3):
-        x = torch.nan_to_num(x, nan=eps)
-        x_min, x_max = x.min(), x.max()
-        return torch.clip((x-x_min)/(x_max - x_min), min=eps)
-
-
-    def calculate_difficulty(self, epoch, eps: float = 1e-10):
-
-        p_now = self.prb_matrix[:, epoch]
-        p_lst = self.prb_matrix[:, epoch-1]
-        diff = p_now - p_lst
-
-        trgs = self.trgs.unsqueeze(1)
-
-        du = torch.mul(torch.minimum(diff.gather(1,trgs), torch.zeros_like(diff.gather(1,trgs))),torch.log(torch.div(p_now.gather(1,trgs), p_lst.gather(1,trgs))))
-        dl = torch.mul(torch.maximum(diff.gather(1,trgs), torch.zeros_like(diff.gather(1,trgs))), torch.log(torch.div(p_now.gather(1,trgs), p_lst.gather(1,trgs))))
-        du = du.view(-1)
-        dl = dl.view(-1)
-        for i in range(diff.shape[0]):
-            diff[i, self.trgs[i]] *=0
-
-        du += torch.mul(torch.maximum(diff, torch.zeros_like(diff)),torch.log(torch.div(p_now, p_lst))).sum(-1)
-        dl += torch.mul(torch.minimum(diff, torch.zeros_like(diff)),torch.log(torch.div(p_now, p_lst))).sum(-1)
-
-        res =  torch.clip(torch.nan_to_num(torch.div(du, dl), nan=eps), min=eps, max=self.MAX_DIFF)
-        return res
-    
-
-
-    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        epoch = trainer.current_epoch
-        if epoch == 0:
-            self.init_rebalancing(trainer, pl_module)
-        with torch.no_grad():
-            softmax = SigSoftmax(dim=-1)
-            pl_module.eval()
-            prds = list()
-            trgs = list()
-            log.info("Calculating rebalanced weights...")
-            for batch_idx, batch in enumerate(trainer.datamodule.rebalancing_dataloader()):
-                for k, _ in batch.items():
-                    batch[k] = batch[k].to(pl_module.device)
-                logits = softmax(pl_module(batch))
-                #if not torch.isclose(logits[0].sum(), torch.ones(1, device=pl_module.device)):
-                #logits = torch.softmax(pl_module(batch), -1)
-                prds.append(logits)
-                trgs.append(pl_module.transform_targets(batch["target"], seq = batch["input_ids"], stage="train")[:,0])
-            self.trgs = torch.cat(trgs).to(self._device).long()
-            self.prb_matrix[:, epoch + 1] = torch.cat(prds, 0).to(self._device)
-            self.difficulty_matrix[:, epoch + 1] = self.calculate_difficulty(epoch + 1)
-            pl_module.train()
-        self.reweight_dataloader(trainer)
-
-class RebalancedSampling(pl.Callback):
-    """Callback to rebalance samples based on the instance difficulty"""
-    def init_rebalancing(self, trainer, pl_module):
-        self.n_classes = pl_module.hparams.num_classes
-        self.n_targets = 4
+        self.n_targets = pl_module.hparams.num_targets
         self.n_samples = trainer.train_dataloader.sampler.weights.shape[0]
         self.n_epochs = trainer.max_epochs
         self._device = trainer.train_dataloader.sampler.weights.device
@@ -704,45 +586,54 @@ class RebalancedSampling(pl.Callback):
             self._w_epoch[i] = torch.pow(self._w_epoch[i], self.n_epochs-i)
 
         self.curr_diff = torch.ones(size=(self.n_samples, 1), device=self._device, dtype=self._dtype).reshape(-1)
-
-        self.MAX_DIFF = 100
-        self.WIN_SIZE = 20
+        self.DECAY = 0.5
 
 
     def reweight_dataloader(self, trainer):
-        """This method updates the dataloader associated with the Trainer (PyTorch Specific)"""
         epoch = trainer.current_epoch + 1
-        decay = 0.5
+        decay = self.DECAY
         w = self.difficulty_matrix[:,0] 
         for i in range(epoch + 1):
             w = self.difficulty_matrix[:,i] * decay + (1-decay) * w
-        w = self.robust_norm(w)
+        w = torch.nan_to_num(torch.clamp(w, min=1e-5), nan=1e-5)
         trainer.train_dataloader.sampler.weights = w.to(self._device).type(self._dtype) 
         trainer.datamodule.weights = w
+        trainer.logger.experiment.add_histogram(tag="sample_weights", values=w, global_step=trainer.current_epoch)
 
-    def minmax_norm(self, x, eps: float = 1e-3):
-        """MinMax Normlisation"""
+    
+    def winsorize(self,x, q_min: float = 0.05, q_max: float = 0.95):
+        _min = torch.quantile(x, q_min)
+        _max = torch.quantile(x, q_max)
+        return torch.clamp(x, min=_min, max =_max)
+
+    def minmax_norm(self, x, eps: float = 1e-5):
         x = torch.nan_to_num(x, nan=eps)
         x_min, x_max = x.min(), x.max()
         return torch.clip((x-x_min)/(x_max - x_min), min=eps)
 
-    def robust_norm(self, x, eps:float = 1e-5, q_min=0.25, q_max=0.75, with_centering: bool = False):
-        """Robust Normalisation (aka Quantile-based)"""
+    def cosine(self, x, y, eps=1e-5):
+        d = torch.nan_to_num(torch.sqrt(torch.pow(x,2) + torch.pow(y,2)),nan=eps)
+        return torch.nan_to_num(torch.clamp(x/d, min=eps, max=1.), nan=eps)
+
+    def robust_norm(self, x, eps:float = 1e-8, q_min=0.25, q_max=0.75, with_centering: bool = False):
         x = torch.nan_to_num(x, nan=eps)
         x_min = torch.quantile(x, q_min)
         x_max = torch.quantile(x, q_max)
         x_median = torch.median(x)
         if with_centering:
             x = (x-x_median)/(x_max-x_min)
+            x = torch.nan_to_num(x, nan=eps)
+            return x
         else:
             x = x/(x_max-x_min)
         return torch.nan_to_num(x, nan=eps)
 
-    def calculate_difficulty(self, epoch, prb_matrix, trgs, eps: float = 1e-10):
-        """Difficulty Calculations"""
+    def calculate_difficulty(self, epoch, prb_matrix, trgs, eps: float = 1e-5):
+
         p_now = prb_matrix[:, epoch]
         p_lst = prb_matrix[:, epoch-1]
         diff = p_now - p_lst
+
 
         du = torch.mul(torch.minimum(diff.gather(1,trgs), torch.zeros_like(diff.gather(1,trgs))),torch.log(torch.div(p_now.gather(1,trgs), p_lst.gather(1,trgs))))
         dl = torch.mul(torch.maximum(diff.gather(1,trgs), torch.zeros_like(diff.gather(1,trgs))), torch.log(torch.div(p_now.gather(1,trgs), p_lst.gather(1,trgs))))
@@ -754,19 +645,16 @@ class RebalancedSampling(pl.Callback):
         du += torch.mul(torch.maximum(diff, torch.zeros_like(diff)),torch.log(torch.div(p_now, p_lst))).sum(-1)
         dl += torch.mul(torch.minimum(diff, torch.zeros_like(diff)),torch.log(torch.div(p_now, p_lst))).sum(-1)
 
-        res =  torch.clip(torch.nan_to_num(torch.div(du, dl), nan=eps), min=eps, max=self.MAX_DIFF)
-        return res
+        return torch.pow(1 - self.cosine(x = dl, y = du, eps=eps),4)
     
-    def calculate_agg_difficulty(self, epoch, eps: float = 1e-10):
-        """If multiclass/multilabel prediction"""
+    def calculate_agg_difficulty(self, epoch, eps: float = 1e-5):
         output = list()
-
         for i in range(0, self.n_targets):
             output.append(self.calculate_difficulty(epoch=epoch, prb_matrix=self.prb_matrix[:,:,i], 
                                             trgs=self.trgs[:,i].unsqueeze(1).long(),
                                             eps=eps))
         output = torch.stack(output)
-        output = torch.amax(output, 0)
+        output = torch.sum(output, dim=0)
         return output
 
 
@@ -784,11 +672,15 @@ class RebalancedSampling(pl.Callback):
                 for k, _ in batch.items():
                     batch[k] = batch[k].to(pl_module.device)
                 logits = softmax(pl_module(batch))
+
                 prds.append(logits)
                 trgs.append(pl_module.transform_targets(batch["target"], seq = batch["input_ids"], stage="train"))
             self.trgs = torch.vstack(trgs).to(self._device).long()
             self.prb_matrix[:, epoch + 1] = torch.cat(prds, 0).to(self._device)
-            self.difficulty_matrix[:, epoch + 1] = self.robust_norm(
-                                                        self.calculate_agg_difficulty(epoch + 1))
+            x = self.calculate_agg_difficulty(epoch + 1)
+            self.difficulty_matrix[:, epoch + 1] = x
+            print("CALC_AGG_DIFF:", "min:%.2f" %torch.min(self.difficulty_matrix[:, epoch + 1]), "max:%.2f" %torch.max(self.difficulty_matrix[:, epoch + 1]) )
+
             pl_module.train()
-        self.reweight_dataloader(trainer)
+            self.reweight_dataloader(trainer)
+        
