@@ -78,3 +78,13 @@ HYDRA_FULL_ERROR=1 python -m src.train experiment=emm trainer.devices=[0] versio
   year={2023}
 }
 ```
+**Code**
+```bibtex
+@misc{life2vec_code,
+  author = {Germans Savcisens},
+  note = {Zenodo},
+  title = {SocialComplexityLab/life2vec},
+  year = {2023},
+  howpublished = {\url{https://doi.org/10.5281/zenodo.10118621}},
+}
+```
