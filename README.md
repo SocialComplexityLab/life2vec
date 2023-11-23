@@ -23,10 +23,12 @@ We use [Hydra](https://hydra.cc/docs/intro/) to run the experiments. The `/conf`
 
 The `/analysis` folder contains `ipynb` notebooks for post-hoc evaluation:
 1. `/embedding` contains the analysis of the embedding spaces,
-2. `/metric` contains notebooks for the model evaluation
-3. `/visualisation` contains notebooks for the visualisation of spaces.
+2. `/metric` contains notebooks for the model evaluation,
+3. `/visualisation` contains notebooks for the visualisation of spaces,
+4. `/tcav` includes TCAV implementation,
+5. `/optimization` hyperparameter tuning.
 
-The source folder, `/src`, contains the data loading and model training codes. Due to the specifics of the `hydra` package, this folder includes TCAV implementation (in `/src/analysis/tcav`) and hyperparameter tuning (in `/src/analysis/hyperparameter`). Here is the overview of the `/src` folder:
+The source folder, `/src`, contains the data loading and model training codes. Due to the specifics of the `hydra` package. Here is the overview of the `/src` folder:
 1. The `/src/data_new` contains scripts to preprocess data as well as prepare data to load into the PyTorch or PyTorch Lightning,
 2. The `/src/models` contains the implementation of baseline models,
 3. The `/src/tasks` include code specific to the particular task, aka MLM, SOP, Mortality Prediction, Emigration Prediction, etc.
