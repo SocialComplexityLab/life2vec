@@ -34,11 +34,12 @@ The source folder, `/src`, contains the data loading and model training codes. D
 3. The `/src/tasks` include code specific to the particular task, aka MLM, SOP, Mortality Prediction, Emigration Prediction, etc.
 4. `/src/tranformer` contains the implementation of the life2vec model:
       1. In `performer.py`, we overwrite the functionality of the `performer-pytorch` package,
-      2. In `cls_model.py`, we have an implementation of the finetuning stage (aka life2vec for personality, mortality, emigration),
-      3. `models.py` contains the code for the life2vec pretraining (aka the base life2vec model),
-      4. The `transformer_utils.py` contains the implementation of custom modules, like losses, activation functions, etc.
-      5. The `metrics.py` contains code for the custom metric,
-      6. The `modules.py`, `attention.py`, `att_utils.py`, and `embeddings.py` contain the implementation of modules used in the transformer network (aka life2vec encoders).
+      2. In `cls_model.py`, we have an implementation of the finetuning stage for the binary classification tasks (i.e. early mortality and emigration),
+      3. In `hexaco_model.py`, we have an implementation of the finetuning stage for the **personality nuance prediction** task,
+      4. `models.py` contains the code for the life2vec **pretraining** (aka the base life2vec model),
+      5. The `transformer_utils.py` contains the implementation of custom modules, like losses, activation functions, etc.
+      6. The `metrics.py` contains code for the custom metric,
+      7. The `modules.py`, `attention.py`, `att_utils.py`, and `embeddings.py` contain the implementation of modules used in the transformer network (aka life2vec encoders).
 
 Scripts such as `train.py`, `test.py`, `tune.py`, and `val.py` used to run a particular stage of the training, while `prepare_data.py` was used to run the data processing (see below the example).
 
