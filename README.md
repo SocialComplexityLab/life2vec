@@ -3,6 +3,10 @@
 [![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.10118620.svg)](https://zenodo.org/doi/10.5281/zenodo.10118620)
 
 This repository contains code for the [Using Sequences of Life-events to Predict Human Lives](https://doi.org/10.21203/rs.3.rs-2975478/v1) (life2vec) paper.
+We do not have any specialized pages or sites, nor do we have any specialized Facebook, Tweeter accounts.
+*Closer to the end of January 2024, we are planning to release a pipeline using the dummy data, so you can run the code on your machine*.
+For more information refer to the [FAQ](https://github.com/SocialComplexityLab/life2vec/wiki/FAQ).
+
 
 ### Source Code
 
@@ -73,10 +77,25 @@ HYDRA_FULL_ERROR=1 python -m src.train experiment=emm trainer.devices=[0] versio
 
 ### How to cite
 
-**Research Square Preprint**
+**Nature Computational Science**
+```bibtex
+@article{savcisens2023using,
+   title={Using sequences of life-events to predict human lives},
+   ISSN={2662-8457},
+   url={http://dx.doi.org/10.1038/s43588-023-00573-5},
+   DOI={10.1038/s43588-023-00573-5},
+   journal={Nature Computational Science},
+   publisher={Springer Science and Business Media LLC},
+   author={Savcisens, Germans and Eliassi-Rad, Tina and Hansen, Lars Kai and Mortensen, Laust Hvas and Lilleholt, Lau and Rogers, Anna and Zettler, Ingo and Lehmann, Sune},
+   year={2023},
+   month=dec}
+```
+
+**ArXiv Preprint**
 ```bibtex
 @article{savcisens2023using,
   title={Using Sequences of Life-events to Predict Human Lives},
+  DOI = {arXiv:2306.03009},
   author={Savcisens, Germans and Eliassi-Rad, Tina and Hansen, Lars Kai and Mortensen, Laust and Lilleholt, Lau and Rogers, Anna and Zettler, Ingo and Lehmann, Sune},
   year={2023}
 }
@@ -85,8 +104,8 @@ HYDRA_FULL_ERROR=1 python -m src.train experiment=emm trainer.devices=[0] versio
 ```bibtex
 @misc{life2vec_code,
   author = {Germans Savcisens},
-  note = {Zenodo},
-  title = {SocialComplexityLab/life2vec},
+  title = {Official code for the "Using Sequences of Life-events to Predict Human Lives" paper},
+  note = {GitHub: SocialComplexityLab/life2vec},
   year = {2023},
   howpublished = {\url{https://doi.org/10.5281/zenodo.10118621}},
 }
