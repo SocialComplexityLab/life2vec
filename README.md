@@ -3,9 +3,9 @@
 [![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.10118620.svg)](https://zenodo.org/doi/10.5281/zenodo.10118620)
 
 This repository contains code for the [Using Sequences of Life-events to Predict Human Lives](https://doi.org/10.21203/rs.3.rs-2975478/v1) (life2vec) paper.
-We do not have any specialized pages or sites, nor do we have any specialized Facebook, Tweeter accounts.
+We have **only one webpage** related to the project ([life2vec.dk](https://life2vec.dk)), and we do not have any specialized Facebook, Tweeter accounts, etc.
 *Closer to the end of January 2024, we are planning to release a pipeline using the dummy data, so you can run the code on your machine*.
-For more information refer to the [FAQ](https://github.com/SocialComplexityLab/life2vec/wiki/FAQ).
+For more information refer to the [FAQ](https://life2vec.dk).
 
 
 ### Source Code
