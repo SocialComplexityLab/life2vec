@@ -8,7 +8,7 @@ For more information refer to the [FAQ](https://life2vec.dk).
 
 
 ### Basic Implementation of life2vec
-*Closer to the end of January 2024, we are planning to release a pipeline using the dummy data, so you can run the code on your machine*. We will keep keep this repository as is; a basic implemenetation of the model is going to be published in the following repository: [carlomarxdk/life2vec-light](https://github.com/carlomarxdk/life2vec-light)
+We will keep keep this repository as is; a basic implemenetation of the model is published in the following repository: [carlomarxdk/life2vec-light](https://github.com/carlomarxdk/life2vec-light)
 
 ### Source Code
 
@@ -81,16 +81,20 @@ HYDRA_FULL_ERROR=1 python -m src.train experiment=emm trainer.devices=[0] versio
 
 **Nature Computational Science**
 ```bibtex
-@article{savcisens2023using,
-   title={Using sequences of life-events to predict human lives},
-   ISSN={2662-8457},
-   url={http://dx.doi.org/10.1038/s43588-023-00573-5},
-   DOI={10.1038/s43588-023-00573-5},
-   journal={Nature Computational Science},
-   publisher={Springer Science and Business Media LLC},
-   author={Savcisens, Germans and Eliassi-Rad, Tina and Hansen, Lars Kai and Mortensen, Laust Hvas and Lilleholt, Lau and Rogers, Anna and Zettler, Ingo and Lehmann, Sune},
-   year={2023},
-   month=dec}
+@article{savcisens2024using,
+      author={Savcisens, Germans and Eliassi-Rad, Tina and Hansen, Lars Kai and Mortensen, Laust Hvas and Lilleholt, Lau and Rogers, Anna and Zettler, Ingo and Lehmann, Sune},
+      title={Using sequences of life-events to predict human lives},
+      journal={Nature Computational Science},
+      year={2024},
+      month={Jan},
+      day={01},
+      volume={4},
+      number={1},
+      pages={43-56},
+      issn={2662-8457},
+      doi={10.1038/s43588-023-00573-5},
+      url={https://doi.org/10.1038/s43588-023-00573-5}
+}
 ```
 
 **ArXiv Preprint**
