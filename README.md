@@ -8,7 +8,9 @@ For more information refer to the [FAQ](https://life2vec.dk).
 
 
 ### Basic Implementation of life2vec
-We will keep keep this repository as is; a basic implemenetation of the model is published in the following repository: [carlomarxdk/life2vec-light](https://github.com/carlomarxdk/life2vec-light)
+We will keep keep this repository as is. We are publishing some components of the **life2vec** model in separate repositories:
+1. a basic implemenetation of the model is published in [carlomarxdk/life2vec-light](https://github.com/carlomarxdk/life2vec-light) - it contains a code to run a pretraining with the dummy data,
+2. a class distance weigthed cross-entropy loss is published in [carlomarxdk/cdw-cross-entropy-loss](https://github.com/carlomarxdk/cdw-cross-entropy-loss) - this loss was used in the Extraversion Traits Prediction task.
 
 ### Source Code
 
