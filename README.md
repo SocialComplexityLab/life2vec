@@ -59,7 +59,7 @@ To run the code, you would use the following commands:
 # run the pretraining:
 HYDRA_FULL_ERROR=1 python -m src.train experiment=pretrain trainer.devices=[7]
 
-# finetuning of the hyperparamaters (for the pretraining)
+# finetuning of the hyperparameters (for the pretraining)
 HYDRA_FULL_ERROR=1 python -m src.train experiment=pretrain_optim
 
 # assemble general dataset (GLOBAL_SET)
